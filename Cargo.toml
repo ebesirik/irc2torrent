@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 openssl = { version = "0.10.42", features = ["vendored"] }
+openssl-sys = { version = "0.9.77", features = ["vendored"] }
 irc = "0.15.0"
 futures = "0.3.25"
 tokio = { version = "1.21.2", features = ["full"] }
