@@ -1,0 +1,12 @@
+nickname = "irc2torrent"
+nick_password = "password"
+alt_nicks = ["irc2torrent_", "irc2torrent__"]
+username = "irc2torrent"
+realname = "irc2torrent"
+server = "irc.torrentleech.org"
+port = 7011
+use_tls = false
+encoding = "UTF-8"
+channels = ["#tlannounces"]
+user_info = "I'm a bot user for the irc2torrent daemon."
+source = "https://github.com/ebesirik/irc2torrent"

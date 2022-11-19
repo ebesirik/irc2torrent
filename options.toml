@@ -1,0 +1,7 @@
+[config]
+rss_key = "XXXXXXXXXXXXXXXXXXXX"
+rtorrent_xmlrpc_url = "http://127.0.0.1:5000/"
+regex_for_downloads_match = [
+    "Some Release.*2160p.*",
+    "Another Release.*S02.*1080p.*WEB.*"
+]
