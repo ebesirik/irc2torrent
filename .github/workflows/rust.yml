@@ -17,8 +17,11 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: Install build target
-      run: rustup target add aarch64-unknown-linux-gnu
+      run: |
+        rustup target add aarch64-unknown-linux-gnu
+        ls -lah /usr/aarch64-unknown-linux*
+        PKG_CONFIG_SYSROOT_DIR=/usr/aarch64-unknown-linux-gnu/
     - name: Build-linux arm64
-      run: cargo build --verbose --release --arm64
+      run: cargo build --verbose --target=aarch64-unknown-linux-gnu
     - name: Run tests
       run: cargo test --verbose
