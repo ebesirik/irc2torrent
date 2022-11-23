@@ -1,13 +1,15 @@
 mod torrent_processor;
 
 use serde::{Serialize, Deserialize};
-use std::fs;
+use std::{fs, time};
+use std::any::Any;
 use toml;
 use irc::client::prelude::*;
 use futures::prelude::*;
 use regex::Regex;
 use std::path::Path;
 use directories::BaseDirs;
+use irc::error::Error;
 use crate::torrent_processor::TorrentProcessor;
 
 #[derive(Serialize,Deserialize)]
@@ -24,30 +26,7 @@ struct Config {
 
 #[tokio::main]
 async fn main() -> Result<(), failure::Error> {
-    let mut config = irc::client::data::config::Config::default();
-    if let Some(proj_dir) = BaseDirs::new(){
-        let cfg_dir_real = proj_dir.config_dir().join("irc2torrent/irc.toml");
-        let cfg_dir_default = proj_dir.config_dir().join("irc2torrent/irc.defaults.toml");
-        let config_paths = [
-            cfg_dir_real.as_path(),
-            Path::new("./irc.toml"),
-            cfg_dir_default.as_path(),
-            Path::new("./irc.defaults.toml"),
-        ];
-        for i in config_paths{
-            if i.exists() {
-                config = irc::client::data::config::Config::load(i)?;
-                break;
-            }
-        }
-        if !config_paths[0].exists(){
-            let c_dir = proj_dir.config_dir().join("irc2torrent");
-            if !c_dir.exists() {
-                fs::create_dir(c_dir);
-            }
-            fs::copy(config_paths[3], config_paths[0]).expect("Unable to copy default file to its location.");
-        }
-    }
+    let config = get_config();
 
     let mut client = Client::from_config(config).await?;
     client.identify()?;
@@ -65,19 +44,39 @@ async fn main() -> Result<(), failure::Error> {
                 torrent_names_regexes.push(dr);
             }
         }
-        while let Some(message) = stream.next().await.transpose()? {
-            //println!("{}", message);
-            let msg_str = message.to_string();
-            if let Some(caps) = re.captures(msg_str.as_str()){
-                let (name, id) = (&caps["name"] as &str, &caps["id"] as &str);
-                println!("Torrent name: {}", name);
-                println!("Torrent Id: {}", id);
-                for regex in &torrent_names_regexes {
-                    if regex.is_match(name) {
-                        if let Ok(b64) = processor.download_torrent(name.to_string(), id.to_string()).await{
-                            processor.add_torrent_and_start(b64, name.to_string()).await;
+        loop {
+            // let result =
+            match stream.next().await.transpose() {
+                Ok(msg) => {
+                    if let Some(message) = msg {
+                        println!("{}", message);
+                        let msg_str = message.to_string();
+                        if let Some(caps) = re.captures(msg_str.as_str()){
+                            let (name, id) = (&caps["name"] as &str, &caps["id"] as &str);
+                            println!("Torrent name: {}", name);
+                            println!("Torrent Id: {}", id);
+                            for regex in &torrent_names_regexes {
+                                if regex.is_match(name) {
+                                    if let Ok(b64) = processor.download_torrent(name.to_string(), id.to_string()).await{
+                                        processor.add_torrent_and_start(b64, name.to_string()).await;
+                                    }
+                                    break;
+                                }
+                            }
                         }
-                        break;
+                    }
+                },
+                Err(e) => {
+                    if e.type_id() == Error::PingTimeout.type_id() {
+                        if let Ok(clnt) = Client::from_config(get_config()).await{
+                            client = clnt;
+                            client.identify()?;
+                            stream = client.stream()?;
+                        } else {
+                            std::thread::sleep(time::Duration::from_secs(1));
+                        }
+                    } else {
+                        return Err(failure::Error::from(e));
                     }
                 }
             }
@@ -85,6 +84,36 @@ async fn main() -> Result<(), failure::Error> {
     }
 
     Ok(())
+}
+
+fn get_config() -> irc::client::data::Config {
+    let mut config = irc::client::data::config::Config::default();
+    if let Some(proj_dir) = BaseDirs::new() {
+        let cfg_dir_real = proj_dir.config_dir().join("irc2torrent/irc.toml");
+        let cfg_dir_default = proj_dir.config_dir().join("irc2torrent/irc.defaults.toml");
+        let config_paths = [
+            cfg_dir_real.as_path(),
+            Path::new("./irc.toml"),
+            cfg_dir_default.as_path(),
+            Path::new("./irc.defaults.toml"),
+        ];
+        for i in config_paths {
+            if i.exists() {
+                if let Ok(cfg) = irc::client::data::config::Config::load(i){
+                    config = cfg;
+                    break;
+                }
+            }
+        }
+        if !config_paths[0].exists() {
+            let c_dir = proj_dir.config_dir().join("irc2torrent");
+            if !c_dir.exists() {
+                let _ = fs::create_dir(c_dir);
+            }
+            fs::copy(config_paths[3], config_paths[0]).expect("Unable to copy default file to its location.");
+        }
+    }
+    config
 }
 
 fn read_or_create_options(filename: String) -> Option<Data> {
