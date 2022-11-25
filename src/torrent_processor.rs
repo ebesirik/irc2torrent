@@ -36,6 +36,10 @@ impl TorrentProcessor {
                 Ok(r) => {
                     info!("Torrent load result: ({name}) {r:?}");
                     info!("Torrent Hash for time fix: {the_hash}");
+                    /*
+                    this line should be added to your .rtorrent.rc file for next line to work;
+                    method.insert = fix_addtime, simple, "d.custom.set=addtime,(cat,$d.creation_date=)"
+                    */
                     let fix_time : Call<String, i32> = Call::new("fix_addtime", the_hash);
                     match client.call(fix_time).await {
                         Ok(_) => info!("Time fixed for {}", name),
