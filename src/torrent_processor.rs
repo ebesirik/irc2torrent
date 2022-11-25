@@ -37,13 +37,14 @@ impl TorrentProcessor {
                     info!("Torrent load result: ({name}) {r:?}");
                     info!("Torrent Hash for time fix: {the_hash}");
                     /*
+                    (https://www.reddit.com/r/torrents/comments/ejkqjv/does_rtorrent_have_knowledge_of_a_date_added/)
                     this line should be added to your .rtorrent.rc file for next line to work;
                     method.insert = fix_addtime, simple, "d.custom.set=addtime,(cat,$d.creation_date=)"
                     */
                     let fix_time : Call<String, i32> = Call::new("fix_addtime", the_hash);
                     match client.call(fix_time).await {
                         Ok(_) => info!("Time fixed for {}", name),
-                        Err(e2) => error!("Error fixing time {:?}", e2)
+                        Err(e2) => error!("Error fixing time {:?},\n\t did you forget to add this line: \n\\t\t'{}'\n\t to your .rtorrent.rc file?", e2, "method.insert = fix_addtime, simple, \"d.custom.set=addtime,(cat,$d.creation_date=)\"")
                     }
                 },
                 Err(e) => println!("File upload err: ({}) {:?}", name, e),
