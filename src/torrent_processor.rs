@@ -7,17 +7,28 @@ use tokio::fs;
 // use openssl::sha::Sha1;
 // use hex_literal::hex;
 use lava_torrent::torrent::v1::Torrent;
+use regex::Regex;
 
 pub struct TorrentProcessor {
     rss_key: String,
     rtorrent_url: String,
-    torrent_files_dir: PathBuf
+    torrent_files_dir: PathBuf,
+    torrent_match_regex_list: Vec<Regex>
 }
 
 impl TorrentProcessor {
 
-    pub fn new(rss:String, url: String, dir: PathBuf) -> Self{
-        Self { rss_key: rss, rtorrent_url: url, torrent_files_dir: dir.join("torrent_files/") }
+    pub fn new(rss:String, url: String, dir: PathBuf, regexes: Vec<Regex>) -> Self{
+        Self { rss_key: rss, rtorrent_url: url, torrent_files_dir: dir.join("torrent_files/"), torrent_match_regex_list: regexes }
+    }
+    
+    pub fn do_we_want_this_torrent(&self, name: &String) -> bool {
+        for regex in &self.torrent_match_regex_list {
+            if regex.is_match(name) {
+                return true;
+            }
+        }
+        return false;
     }
 
     pub async fn add_torrent_and_start(&self, file: String, name: String) {

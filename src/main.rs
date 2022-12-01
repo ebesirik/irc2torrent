@@ -1,20 +1,19 @@
 mod torrent_processor;
+mod irc_processor;
+
 extern crate syslog;
 #[macro_use]
 extern crate log;
 
 use serde::{Serialize, Deserialize};
-use std::{fs, time};
-use std::any::Any;
+use std::{fs};
 use toml;
-use irc::client::prelude::*;
-use futures::prelude::*;
 use regex::Regex;
 use std::path::Path;
 use directories::BaseDirs;
-use irc::error::Error;
 use syslog::{Facility, Formatter3164, BasicLogger};
 use log::{LevelFilter};
+use crate::irc_processor::IrcProcessor;
 use crate::torrent_processor::TorrentProcessor;
 
 #[derive(Serialize,Deserialize)]
@@ -41,69 +40,29 @@ async fn main() -> Result<(), failure::Error> {
     let _ = log::set_boxed_logger(Box::new(BasicLogger::new(logger)))
         .map(|()| log::set_max_level(LevelFilter::Info));
     info!("Started the app");
-    let config = get_config();
-
-    let mut client = Client::from_config(config).await?;
-    client.identify()?;
-
-    let mut stream = client.stream()?;
+    let config = get_irc_config();
 
     let re = Regex::new(r".*Name:'(?P<name>.*)' uploaded by.*https://www.torrentleech.org/torrent/(?P<id>\d+)").unwrap();
 
     let filename = "irc2torrent/options.toml";
     if let Some(options) = read_or_create_options(filename.to_string()){//Some(proj_dir) = BaseDirs::new()
         if let Some(proj_dir) = BaseDirs::new(){
-            let processor = TorrentProcessor::new(options.config.rss_key, options.config.rtorrent_xmlrpc_url, proj_dir.config_dir().to_path_buf());
             let mut torrent_names_regexes: Vec<Regex> = Vec::new();
             for downloads_match in options.config.regex_for_downloads_match {
                 if let Ok(dr) = Regex::new(downloads_match.as_str()){
                     torrent_names_regexes.push(dr);
                 }
             }
-            loop {
-                // let result =
-                match stream.next().await.transpose() {
-                    Ok(msg) => {
-                        if let Some(message) = msg {
-                            info!("{}", message);
-                            let msg_str = message.to_string();
-                            if let Some(caps) = re.captures(msg_str.as_str()){
-                                let (name, id) = (&caps["name"] as &str, &caps["id"] as &str);
-                                info!("Torrent name: {}", name);
-                                info!("Torrent Id: {}", id);
-                                for regex in &torrent_names_regexes {
-                                    if regex.is_match(name) {
-                                        if let Ok(b64) = processor.download_torrent(name.to_string(), id.to_string()).await{
-                                            processor.add_torrent_and_start(b64, name.to_string()).await;
-                                        }
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    Err(e) => {
-                        if e.type_id() == Error::PingTimeout.type_id() {
-                            if let Ok(clnt) = Client::from_config(get_config()).await{
-                                client = clnt;
-                                client.identify()?;
-                                stream = client.stream()?;
-                            } else {
-                                std::thread::sleep(time::Duration::from_secs(1));
-                            }
-                        } else {
-                            return Err(failure::Error::from(e));
-                        }
-                    }
-                }
-            }
+            let processor = TorrentProcessor::new(options.config.rss_key, options.config.rtorrent_xmlrpc_url, proj_dir.config_dir().to_path_buf(), torrent_names_regexes);
+            let mut irc = IrcProcessor::new(config, re, processor);
+            irc.start_listening().await;
         }
     }
 
     Ok(())
 }
 
-fn get_config() -> irc::client::data::Config {
+fn get_irc_config() -> irc::client::data::Config {
     let mut config = irc::client::data::config::Config::default();
     if let Some(proj_dir) = BaseDirs::new() {
         let cfg_dir_real = proj_dir.config_dir().join("irc2torrent/irc.toml");

@@ -5,6 +5,10 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[dependencies.async-std]
+version = "1.12.0"
+features = ["attributes"]
+
 [dependencies]
 openssl = { version = "0.10.42", features = ["vendored"] }
 openssl-sys = { version = "0.9.77", features = ["vendored"] }
