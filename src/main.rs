@@ -54,7 +54,7 @@ async fn main() -> Result<(), failure::Error> {
                 }
             }
             let processor = TorrentProcessor::new(options.config.rss_key, options.config.rtorrent_xmlrpc_url, proj_dir.config_dir().to_path_buf(), torrent_names_regexes);
-            let mut irc = IrcProcessor::new(config, re, processor);
+            let irc = IrcProcessor::new(config, re, processor);
             irc.start_listening().await;
         }
     }
