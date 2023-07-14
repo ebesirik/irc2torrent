@@ -1,12 +1,13 @@
 mod torrent_processor;
 mod irc_processor;
+mod command_processor;
 
 extern crate syslog;
 #[macro_use]
 extern crate log;
 
 use serde::{Serialize, Deserialize};
-use std::{fs};
+use std::{fs, process};
 use toml;
 use regex::Regex;
 use std::path::Path;
@@ -34,7 +35,7 @@ async fn main() -> Result<(), failure::Error> {
         facility: Facility::LOG_USER,
         hostname: None,
         process: "irc2torrent".into(),
-        pid: 42,
+        pid: process::id(),
     };
     if let Ok(logger) = syslog::unix(formatter) {
         let _ = log::set_boxed_logger(Box::new(BasicLogger::new(logger)))
