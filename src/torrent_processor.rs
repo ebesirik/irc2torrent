@@ -37,10 +37,10 @@ impl TorrentProcessor {
             .user_agent("dxr-client-example")
             .build();
         let request = Call::new("d.multicall2", ("main", "d.get_name=", "d.get_base_path=", "d.get_bytes_done=", "d.get_size_bytes=", "d.get_ratio=", "d.get_up_rate=", "d.get_down_rate=", "d.get_hash=", "d.get_creation_date=", "d.get_custom=addtime="));
-        let result = client.call(request).await as Result<i32, anyhow::Error>;
+        let result = client.call(request).await as Result<String, anyhow::Error>;
         match result {
             Ok(r) => {
-                info!("Torrent load result: ({name}) {r:?}");
+                info!("Torrent load result: {r:?}");
             },
             Err(e) => {
                 error!("Error loading torrent: {:?}", e);
