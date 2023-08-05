@@ -33,6 +33,23 @@ impl <'tp>TorrentProcessor<'tp> {
         return false;
     }
 
+    pub async fn get_dl_list(&self){
+        let url = Url::parse(&self.rtorrent_url).unwrap();
+        let client: Client = ClientBuilder::new(url)
+            .user_agent("dxr-client-example")
+            .build();
+        let request = Call::new("d.multicall2", ("main", "d.get_name=", "d.get_base_path=", "d.get_size_bytes=", "d.get_creation_date=", "d.get_custom=addtime="));
+        let result = client.call(request).await as Result<String, anyhow::Error>;
+        match result {
+            Ok(r) => {
+                info!("Torrent load result: {r:?}");
+            },
+            Err(e) => {
+                error!("Error loading torrent: {:?}", e);
+            }
+        }
+    }
+
     pub async fn add_torrent_and_start(&self, file: String, name: String) {
         let url = Url::parse(&self.rtorrent_url).unwrap();
         let client: Client = ClientBuilder::new(url)
