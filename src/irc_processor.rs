@@ -8,17 +8,19 @@ use irc::client::data::Config;
 use irc::error::Error;
 use irc::proto::Command;
 use regex::Regex;
+use crate::command_processor::CommandProcessor;
 use crate::torrent_processor::TorrentProcessor;
 
-pub struct IrcProcessor {
-    config: Config,
+pub struct IrcProcessor<'ip, 'tp, 'cp> {
+    config: &'ip Config,
     release_catching_regex: Regex,
-    tp: TorrentProcessor,
+    tp: &'ip TorrentProcessor<'tp>,
+    cp: &'ip CommandProcessor<'cp, 'tp>,
 }
 
-impl<'a> IrcProcessor {
-    pub fn new(cfg: Config, rcr: Regex, torrent_processor: TorrentProcessor) -> Self {
-        Self {config: cfg, release_catching_regex: rcr, tp: torrent_processor}
+impl<'ip, 'tp, 'cp> IrcProcessor<'ip, 'tp, 'cp> {
+    pub fn new(cfg: &'ip Config, rcr: Regex, torrent_processor: &'tp TorrentProcessor, command_processor: &'cp CommandProcessor<'cp, 'tp>) -> Self {
+        Self {config: cfg, release_catching_regex: rcr, tp: torrent_processor, cp: command_processor }
     }
 
     pub async fn start_listening(&self){
@@ -31,11 +33,11 @@ impl<'a> IrcProcessor {
                                 println!("channel: {:?}", channel);
                                 println!("message: {:?}", inner_message);
                                 println!("source nick: {:?}", nick);
-                                println!("{}@{}: {}", nick, channel, inner_message);
+                                info!("{}@{}: {}", nick, channel, inner_message);
                                 if let Some(caps) = self.release_catching_regex.captures(inner_message) {
-                                    let (name, id) = (&caps["name"] as &str, &caps["id"] as &str);
-                                    println!("Torrent name: {}", name);
-                                    println!("Torrent Id: {}", id);
+                                    let (name, id) = (&caps["name"], &caps["id"]);
+                                    info!("Torrent name: {}", name);
+                                    info!("Torrent Id: {}", id);
                                     if self.tp.do_we_want_this_torrent(&name.to_string()) {
                                         if let Ok(b64) = self.tp.download_torrent(name.to_string(), id.to_string()).await {
                                             self.tp.add_torrent_and_start(b64, name.to_string()).await;
@@ -54,7 +56,7 @@ impl<'a> IrcProcessor {
                                 let _ = task::sleep(time::Duration::from_secs(1));
                             }
                         } else {
-                            println!("{:?}", e);
+                            error!("{:?}", e);
                         }
                     }
                 }
@@ -62,7 +64,7 @@ impl<'a> IrcProcessor {
         }
     }
 
-    pub async fn connect_irc<'b: 'a>(&self) -> Option<ClientStream>{
+    pub async fn connect_irc(&self) -> Option<ClientStream>{
         let cli:Option<ClientStream> = match Client::from_config(self.config.clone()).await {
             Ok(mut c) => {
                 if let Ok(_) = c.identify(){

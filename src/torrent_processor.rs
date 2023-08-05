@@ -8,18 +8,20 @@ use tokio::fs;
 // use hex_literal::hex;
 use lava_torrent::torrent::v1::Torrent;
 use regex::Regex;
+use crate::config::Config;
 
-pub struct TorrentProcessor {
+pub struct TorrentProcessor<'tp> {
     rss_key: String,
     rtorrent_url: String,
     torrent_files_dir: PathBuf,
-    torrent_match_regex_list: Vec<Regex>
+    torrent_match_regex_list: Vec<Regex>,
+    options: &'tp Config
 }
 
-impl TorrentProcessor {
+impl <'tp>TorrentProcessor<'tp> {
 
-    pub fn new(rss:String, url: String, dir: PathBuf, regexes: Vec<Regex>) -> Self{
-        Self { rss_key: rss, rtorrent_url: url, torrent_files_dir: dir.join("torrent_files/"), torrent_match_regex_list: regexes }
+    pub fn new(rss:String, url: String, dir: PathBuf, config: &'tp Config) -> Self{
+        Self { rss_key: rss, rtorrent_url: url, torrent_files_dir: dir.join("torrent_files/"), torrent_match_regex_list: config.get_dl_regexes(), options: config }
     }
     
     pub fn do_we_want_this_torrent(&self, name: &String) -> bool {
