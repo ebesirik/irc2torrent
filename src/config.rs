@@ -1,11 +1,10 @@
 use serde_derive::{Deserialize, Serialize};
 use directories::BaseDirs;
 use regex::Regex;
-use serde::de::Error;
 use tokio::{fs, io};
-use std::path::{Path, PathBuf};
+use std::path::{PathBuf};
 use serde::{de, ser};
-use crate::{IRC_CONFIG, OPTIONS_CONFIG};
+use crate::{IRC_CONFIG_FILE, OPTIONS_CONFIG_FILE};
 
 
 pub struct Config {
@@ -23,7 +22,7 @@ pub struct OptionData {
 
 struct Defaults {
     pub irc_defaults: irc::client::data::config::Config,
-    pub options_defaults: OptionData
+    pub options_defaults: OptionData,
 }
 
 impl Config {
@@ -70,32 +69,33 @@ impl Config {
                 path: irc::client::data::config::Config::default().path,
             },
         };
-        if let (Some(option_config), Some(irc_config)) = (Config::read_or_create_toml::<OptionData>(OPTIONS_CONFIG.to_string(), Some(&default.options_defaults)).await,
-                                                          Config::read_or_create_toml::<irc::client::data::config::Config>(IRC_CONFIG.to_string(), Some(&default.irc_defaults)).await) {
-            return Ok(Self { option_data: option_config, irc_data: irc_config, defaults: default });
+        return if let (Some(option_config), Some(irc_config)) = (Config::read_or_create_toml::<OptionData>(OPTIONS_CONFIG_FILE.to_string(), Some(&default.options_defaults)).await,
+                                                                 Config::read_or_create_toml::<irc::client::data::config::Config>(IRC_CONFIG_FILE.to_string(), Some(&default.irc_defaults)).await) {
+            Ok(Self { option_data: option_config, irc_data: irc_config, defaults: default })
         } else {
-            return Err(io::Error::new(io::ErrorKind::Other, "Could not read or create options file"));
+            Err(io::Error::new(io::ErrorKind::Other, "Could not read or create options file"))
         }
     }
 
     pub fn get_dl_regexes(&self) -> Vec<Regex> {
+        /*let mut torrent_names_regexes: Vec<Regex> = self.option_data.regex_for_downloads_match.iter().filter_map(|regex| Regex::new(regex.as_str()).ok()).collect();
         let mut torrent_names_regexes: Vec<Regex> = Vec::new();
         for downloads_match in &self.option_data.regex_for_downloads_match {
             if let Ok(dr) = Regex::new(downloads_match.as_str()) {
                 torrent_names_regexes.push(dr);
             }
-        }
-        return torrent_names_regexes;
+        }*/
+        return self.option_data.regex_for_downloads_match.iter().filter_map(|regex| Regex::new(regex.as_str()).ok()).collect();
     }
 
-    pub fn add_dl_regex(&mut self, regex: String) {
+    pub async fn add_dl_regex(&mut self, regex: String) {
         self.option_data.regex_for_downloads_match.push(regex);
-        self.update_option_file(OPTIONS_CONFIG.to_string(), &self.option_data);
+        let _ = self.update_option_file(OPTIONS_CONFIG_FILE.to_string(), &self.option_data).await;
     }
 
-    pub fn remove_dl_regex(&mut self, regex: usize) {
+    pub async fn remove_dl_regex(&mut self, regex: usize) {
         self.option_data.regex_for_downloads_match.remove(regex);
-        self.update_option_file(OPTIONS_CONFIG.to_string(), &self.option_data);
+        let _ = self.update_option_file(OPTIONS_CONFIG_FILE.to_string(), &self.option_data).await;
     }
 
     pub fn get_rss_key(&self) -> String {
@@ -114,7 +114,7 @@ impl Config {
         where T: ser::Serialize, T: de::DeserializeOwned {
         if let Some(full_path_buf) = Config::get_full_config_path(filename.clone()) {
             info!("You can edit the config file at '{}' location", full_path_buf.to_str()?);
-            if full_path_buf.exists() {
+            return if full_path_buf.exists() {
                 let path = full_path_buf.as_path();
                 let contents: String = match fs::read_to_string(path).await {
                     Ok(c) => c,
@@ -123,13 +123,13 @@ impl Config {
                         return None;
                     }
                 };
-                return match toml::from_str(&contents) {
+                match toml::from_str(&contents) {
                     Ok(d) => d,
                     Err(_) => {
                         error!("Unable to load data from `{}`", path.to_str()?);
                         return None;
                     }
-                };
+                }
             } else {
                 if let Some(result) = data {
                     let toml = toml::to_string(result).unwrap();
@@ -139,7 +139,7 @@ impl Config {
                         Err(_) => error!("Error creating {} file", path.to_str()?)
                     };
                 }
-                return None;
+                None
             }
         }
 
@@ -155,30 +155,25 @@ impl Config {
         return None;
     }
 
-    pub async fn update_option_file<T>(&self, filename: String, config: T) -> Result<(), io::Error>
-        where T: ser::Serialize{
-        if let Some(proj_dir) = BaseDirs::new() {
-            if let Ok(toml) = toml::to_string(&config) {
-                if let Some(path) = Config::get_full_config_path(filename) {
-                    return match fs::write(path, toml).await {
-                        Ok(_) => {
-                            info!("Options file updated");
-                            Ok(())
-                        }
-                        _ => {
-                            error!("Error updating options file");
-                            Err(io::Error::new(io::ErrorKind::Other, "Could not update options file"))
-                        }
-                    };
+    pub async fn update_option_file<T>(&self, filename: String, config: T) -> Result<bool, String>
+        where T: ser::Serialize {
+        if let Ok(toml) = toml::to_string(&config) {
+            if let Some(path) = Config::get_full_config_path(filename) {
+                return match fs::write(path, toml).await {
+                    Ok(_) => {
+                        info!("Options file updated");
+                        Ok(true)
+                    }
+                    _ => {
+                        error!("Error updating options file");
+                        Err("Could not update options file".to_string())
+                    }
                 };
-            } else {
-                error!("Error updating options file");
-                return Err(io::Error::new(io::ErrorKind::Other, "Could not update options file"));
-            }
+            };
         } else {
             error!("Error updating options file");
-            return Err(io::Error::new(io::ErrorKind::Other, "Could not update options file"));
+            return Err("Could not update options file".to_string());
         }
-        return Err(io::Error::new(io::ErrorKind::Other, "Could not update options file"));
+        return Err("Could not update options file".to_string());
     }
 }

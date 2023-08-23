@@ -8,7 +8,7 @@ extern crate syslog;
 extern crate log;
 
 use serde::{Serialize, Deserialize};
-use std::{fs, process};
+use std::{process};
 use toml;
 use regex::Regex;
 use directories::BaseDirs;
@@ -19,8 +19,8 @@ use crate::irc_processor::IrcProcessor;
 use crate::torrent_processor::TorrentProcessor;
 use crate::config::Config;
 
-static IRC_CONFIG: &str = "irc.toml";
-static OPTIONS_CONFIG: &str = "options.toml";
+static IRC_CONFIG_FILE: &str = "irc.toml";
+static OPTIONS_CONFIG_FILE: &str = "options.toml";
 
 #[tokio::main]
 async fn main() -> Result<(), failure::Error> {
@@ -37,7 +37,6 @@ async fn main() -> Result<(), failure::Error> {
 
     let re: Regex = Regex::new(r".*Name:'(?P<name>.*)' uploaded by.*https://www.torrentleech.org/torrent/(?P<id>\d+)").unwrap();
 
-    let filename = "irc2torrent/options.toml";
     if let Ok(options) = Config::new().await {//Some(proj_dir) = BaseDirs::new()
         let irc_config = options.get_irc_config();
         if let Some(proj_dir) = BaseDirs::new() {
