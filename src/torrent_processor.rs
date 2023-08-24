@@ -84,7 +84,6 @@ impl<'tp> TorrentProcessor<'tp> {
 
     pub async fn download_torrent(&self, name: String, id: String) -> Result<String, String> {
         println!("Downloading torrent: {}", name);
-        // let dl_key = "7ef1038ba2293421b526".to_string();
 
         let torrent_file = name.replace(" ", ".") + ".torrent";
         if let Ok(resp) = reqwest::get(format!("https://www.torrentleech.org/rss/download/{}/{}/{}", id, &self.rss_key, torrent_file)).await {
