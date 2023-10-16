@@ -2,6 +2,8 @@ mod torrent_processor;
 mod irc_processor;
 mod command_processor;
 mod config;
+mod pub_sub;
+pub use pub_sub::{Publisher, Subscriber};
 
 extern crate syslog;
 #[macro_use]
@@ -40,9 +42,9 @@ async fn main() -> Result<(), failure::Error> {
     if let Ok(options) = Config::new().await {//Some(proj_dir) = BaseDirs::new()
         let irc_config = options.get_irc_config();
         if let Some(proj_dir) = BaseDirs::new() {
-            let processor = TorrentProcessor::new(options.get_rss_key(), options.get_xmlrpc_url(), proj_dir.config_dir().to_path_buf(), &options);
-            let cp = CommandProcessor::new(&options, &processor, re.clone());
-            let irc = IrcProcessor::new(&irc_config, re, &processor, &cp);
+            let mut processor = TorrentProcessor::new(options.get_rss_key(), options.get_xmlrpc_url(), proj_dir.config_dir().to_path_buf(), &options);
+            let cp = CommandProcessor::new(&options, &mut processor, re.clone());
+            let irc = IrcProcessor::new(&irc_config, re, &mut processor, &cp);
             irc.start_listening().await;
         }
     }

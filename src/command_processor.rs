@@ -5,13 +5,13 @@ use crate::torrent_processor::TorrentProcessor;
 
 pub struct CommandProcessor<'cp, 'tp> {
     config: &'cp Config,
-    tp: &'cp TorrentProcessor<'tp>,
+    tp: &'cp mut TorrentProcessor<'tp>,
     command_catching_regex: Regex,
     announce_regex: Regex,
 }
 
 impl<'cp, 'tp> CommandProcessor<'cp, 'tp> {
-    pub fn new(cfg: &'cp Config, torrent_processor: &'tp TorrentProcessor, announce_regex: Regex) -> Self {
+    pub fn new(cfg: &'cp Config, torrent_processor: &'tp mut TorrentProcessor, announce_regex: Regex) -> Self {
         Self {
             config: cfg,
             command_catching_regex: Regex::new("(?P<command>[a-z]):(?P<params>.*)").unwrap(),
@@ -44,20 +44,20 @@ impl<'cp, 'tp> CommandProcessor<'cp, 'tp> {
                     return Err("Not implemented yet".to_string());
                 }
                 "removewatch" => {
-                    return true;
+                    return Err("Not implemented yet".to_string());
                 }
                 "torrentlist" => {
-                    return true;
+                    return Err("Not implemented yet".to_string());
                 }
                 "watchlist" => {
-                    return true;
+                    return Err("Not implemented yet".to_string());
                 }
                 _ => {
-                    return false;
+                    return Err("Not implemented yet".to_string());
                 }
             }
         }
-        false
+        Err("Not implemented yet".to_string())
     }
 
     fn process_result(&self, result: Result<String, String>) -> Result<String, String> {
@@ -73,11 +73,9 @@ impl<'cp, 'tp> CommandProcessor<'cp, 'tp> {
         }
     }
 
-    async fn remove_watch(&self, argument: &str) -> Result<String, String> {
+    async fn remove_watch(&mut self, idx: usize) -> Result<String, String> {
         let mut err_str = "Wrong argument format. Use: removewatch <torrent name> <torrent id>";
-        if let Some(caps) = self.announce_regex.captures(argument) {
-            return self.tp.remove_watch(&caps["name"], &caps["id"]).await;
-        }
+        return self.tp.remove_torrent_from_watchlist(idx);
         Err(err_str.to_string())
     }
 

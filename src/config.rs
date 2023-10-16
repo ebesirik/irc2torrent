@@ -1,16 +1,20 @@
+use std::collections::HashSet;
 use serde_derive::{Deserialize, Serialize};
 use directories::BaseDirs;
 use regex::Regex;
 use tokio::{fs, io};
 use std::path::{PathBuf};
+use std::rc::{Rc, Weak};
 use serde::{de, ser};
-use crate::{IRC_CONFIG_FILE, OPTIONS_CONFIG_FILE};
+use std::sync::{Mutex};
+use crate::{IRC_CONFIG_FILE, OPTIONS_CONFIG_FILE, Subscriber, Publisher};
 
 
 pub struct Config {
     option_data: OptionData,
     irc_data: irc::client::data::config::Config,
     defaults: Defaults,
+    subscribers: Mutex<HashSet<Weak<dyn Subscriber>>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -37,7 +41,6 @@ impl Config {
                 ].to_vec(),
             },
             irc_defaults: irc::client::data::config::Config {
-                owners: irc::client::data::config::Config::default().owners,
                 nickname: Some("irc2torrent".to_string()),
                 nick_password: Some("password".to_string()),
                 alt_nicks: vec!["irc2torrent_".to_string(), "irc2torrent__".to_string(), "irc2torrent___".to_string(), "irc2torrent____".to_string(), "irc2torrent_____".to_string(), "irc2torrent______".to_string()],
@@ -45,33 +48,15 @@ impl Config {
                 realname: Some("irc2torrent".to_string()),
                 server: Some("irc.torrentleech.org".to_string()),
                 port: Some(7011),
-                password: irc::client::data::config::Config::default().password,
-                use_tls: Some(false),
-                cert_path: irc::client::data::config::Config::default().cert_path,
-                encoding: Some("UTF-8".to_string()),
                 channels: vec!["#tlannounces".to_string()],
                 user_info: Some("I'm a bot user for the irc2torrent daemon.".to_string()),
                 source: Some("https://github.com/ebesirik/irc2torrent".to_string()),
-                client_cert_path: irc::client::data::config::Config::default().client_cert_path,
-                client_cert_pass: irc::client::data::config::Config::default().client_cert_pass,
-                umodes: irc::client::data::config::Config::default().umodes,
-                version: irc::client::data::config::Config::default().version,
-                ping_time: irc::client::data::config::Config::default().ping_time,
-                ping_timeout: irc::client::data::config::Config::default().ping_timeout,
-                burst_window_length: irc::client::data::config::Config::default().burst_window_length,
-                max_messages_in_burst: irc::client::data::config::Config::default().max_messages_in_burst,
-                should_ghost: irc::client::data::config::Config::default().should_ghost,
-                ghost_sequence: irc::client::data::config::Config::default().ghost_sequence,
-                use_mock_connection: irc::client::data::config::Config::default().use_mock_connection,
-                mock_initial_value: irc::client::data::config::Config::default().mock_initial_value,
-                channel_keys: irc::client::data::config::Config::default().channel_keys,
-                options: irc::client::data::config::Config::default().options,
-                path: irc::client::data::config::Config::default().path,
+                ..irc::client::data::config::Config::default()
             },
         };
         return if let (Some(option_config), Some(irc_config)) = (Config::read_or_create_toml::<OptionData>(OPTIONS_CONFIG_FILE.to_string(), Some(&default.options_defaults)).await,
                                                                  Config::read_or_create_toml::<irc::client::data::config::Config>(IRC_CONFIG_FILE.to_string(), Some(&default.irc_defaults)).await) {
-            Ok(Self { option_data: option_config, irc_data: irc_config, defaults: default })
+            Ok(Self { option_data: option_config, irc_data: irc_config, defaults: default, subscribers: Mutex::new(HashSet::new()) })
         } else {
             Err(io::Error::new(io::ErrorKind::Other, "Could not read or create options file"))
         }
@@ -175,5 +160,22 @@ impl Config {
             return Err("Could not update options file".to_string());
         }
         return Err("Could not update options file".to_string());
+    }
+}
+
+impl Subscriber for Config {
+    fn handle_notification(&mut self, message: &str) {
+        todo!()
+    }
+}
+
+impl Publisher for Config {
+    fn add_subscriber(&self, subscriber: Rc<dyn Subscriber>) {
+        let weak_subscriber = Rc::downgrade(&subscriber);
+        self.subscribers.lock().unwrap().insert(weak_subscriber);
+    }
+
+    fn notify_subscribers(&self, message: &str) {
+        todo!()
     }
 }
