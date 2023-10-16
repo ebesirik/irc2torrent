@@ -1,7 +1,18 @@
-[package]
+[[irc2torrent]]
 name = "irc2torrent"
 version = "0.1.0"
+authors = ["Emre Besirik"]
+
+[package]
+name = "irc2torrent"
+description = "IRC bot that downloads torrents from IRC"
+version = "0.1.0"
 edition = "2021"
+
+[package.metadata.bundle.irc2torrent]
+name = "irc2torrent"
+version = "0.1.0"
+authors = ["Emre Besirik"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
