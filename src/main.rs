@@ -40,7 +40,7 @@ async fn main() -> Result<(), failure::Error> {
         let _ = log::set_boxed_logger(Box::new(BasicLogger::new(logger)))
             .map(|()| log::set_max_level(LevelFilter::Info));
     }
-    info!("Started the app");
+    println!("Started the app");
     let config = get_irc_config();
 
     let re = Regex::new(r".*Name:'(?P<name>.*)' uploaded by.*https://www.torrentleech.org/torrent/(?P<id>\d+)").unwrap();
@@ -89,8 +89,8 @@ fn get_irc_config() -> irc::client::data::Config {
                 let _ = fs::create_dir(c_dir);
             }
             match fs::copy(config_paths[3], config_paths[0]){
-                Ok(_) => info!("New irc config file created at '{:?}' location, please consider modifying it before running to app.", config_paths[0].to_str()),
-                Err(err) => error!("Error creating {:?} file - ({})", config_paths[0].to_str(), err.to_string())
+                Ok(_) => println!("New irc config file created at '{:?}' location, please consider modifying it before running to app.", config_paths[0].to_str()),
+                Err(err) => println!("Error creating {:?} file - ({})", config_paths[0].to_str(), err.to_string())
             }
         }
     }
@@ -132,7 +132,7 @@ fn read_or_create_options(filename: String) -> Option<Data> {
             let toml = toml::to_string(&result).unwrap();
             let path = full_path_buf.as_path();
             match fs::write(path, toml) {
-                Ok(_) => info!("New options file created at '{}' location, please consider modifying it before running to app.", path.to_str()?),
+                Ok(_) => println!("New options file created at '{}' location, please consider modifying it before running to app.", path.to_str()?),
                 Err(_) => error!("Error creating {} file", path.to_str()?)
             };
         }

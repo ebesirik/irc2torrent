@@ -31,11 +31,11 @@ impl<'a> IrcProcessor {
                                 println!("channel: {:?}", channel);
                                 println!("message: {:?}", inner_message);
                                 println!("source nick: {:?}", nick);
-                                info!("{}@{}: {}", nick, channel, inner_message);
+                                println!("{}@{}: {}", nick, channel, inner_message);
                                 if let Some(caps) = self.release_catching_regex.captures(inner_message) {
                                     let (name, id) = (&caps["name"] as &str, &caps["id"] as &str);
-                                    info!("Torrent name: {}", name);
-                                    info!("Torrent Id: {}", id);
+                                    println!("Torrent name: {}", name);
+                                    println!("Torrent Id: {}", id);
                                     if self.tp.do_we_want_this_torrent(&name.to_string()) {
                                         if let Ok(b64) = self.tp.download_torrent(name.to_string(), id.to_string()).await {
                                             self.tp.add_torrent_and_start(b64, name.to_string()).await;
@@ -54,7 +54,7 @@ impl<'a> IrcProcessor {
                                 let _ = task::sleep(time::Duration::from_secs(1));
                             }
                         } else {
-                            error!("{:?}", e);
+                            println!("{:?}", e);
                         }
                     }
                 }
