@@ -16,16 +16,16 @@ use log::{LevelFilter};
 use crate::irc_processor::IrcProcessor;
 use crate::torrent_processor::TorrentProcessor;
 
-#[derive(Serialize,Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct Data {
     config: Config,
 }
 
-#[derive(Serialize,Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct Config {
     rss_key: String,
     rtorrent_xmlrpc_url: String,
-    regex_for_downloads_match: Vec<String>
+    regex_for_downloads_match: Vec<String>,
 }
 
 #[tokio::main]
@@ -36,20 +36,21 @@ async fn main() -> Result<(), failure::Error> {
         process: "irc2torrent".into(),
         pid: 42,
     };
-    let logger = syslog::unix(formatter).expect("could not connect to syslog");
-    let _ = log::set_boxed_logger(Box::new(BasicLogger::new(logger)))
-        .map(|()| log::set_max_level(LevelFilter::Info));
+    if let Ok(logger) = syslog::unix(formatter) {
+        let _ = log::set_boxed_logger(Box::new(BasicLogger::new(logger)))
+            .map(|()| log::set_max_level(LevelFilter::Info));
+    }
     info!("Started the app");
     let config = get_irc_config();
 
     let re = Regex::new(r".*Name:'(?P<name>.*)' uploaded by.*https://www.torrentleech.org/torrent/(?P<id>\d+)").unwrap();
 
     let filename = "irc2torrent/options.toml";
-    if let Some(options) = read_or_create_options(filename.to_string()){//Some(proj_dir) = BaseDirs::new()
-        if let Some(proj_dir) = BaseDirs::new(){
+    if let Some(options) = read_or_create_options(filename.to_string()) {//Some(proj_dir) = BaseDirs::new()
+        if let Some(proj_dir) = BaseDirs::new() {
             let mut torrent_names_regexes: Vec<Regex> = Vec::new();
             for downloads_match in options.config.regex_for_downloads_match {
-                if let Ok(dr) = Regex::new(downloads_match.as_str()){
+                if let Ok(dr) = Regex::new(downloads_match.as_str()) {
                     torrent_names_regexes.push(dr);
                 }
             }
@@ -76,7 +77,7 @@ fn get_irc_config() -> irc::client::data::Config {
         ];
         for i in config_paths {
             if i.exists() {
-                if let Ok(cfg) = irc::client::data::config::Config::load(i){
+                if let Ok(cfg) = irc::client::data::config::Config::load(i) {
                     config = cfg;
                     break;
                 }
@@ -101,7 +102,7 @@ fn read_or_create_options(filename: String) -> Option<Data> {
             regex_for_downloads_match: [
                 "Some Regex to match.*1080p.*".to_string(),
                 "Another Release.*S02.*1080p.*WEB.*".to_string()
-            ].to_vec()
+            ].to_vec(),
         }
     };
     if let Some(proj_dir) = BaseDirs::new() {
