@@ -2,9 +2,9 @@ mod torrent_processor;
 mod irc_processor;
 mod command_processor;
 mod config;
-mod pub_sub;
-pub use pub_sub::{Publisher, Subscriber};
-
+// mod pub_sub;
+// pub use pub_sub::{Publisher, Subscriber};
+extern crate pub_sub;
 extern crate syslog;
 #[macro_use]
 extern crate log;
