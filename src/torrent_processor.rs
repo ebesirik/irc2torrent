@@ -13,7 +13,7 @@ pub mod torrent {
     use pub_sub::{PubSub, Subscription};
     use regex::Regex;
     use crate::config::config::Config;
-    
+
     pub struct TorrentProcessor {
         evt_channel: PubSub<String>,
         subs_cfg: Vec<Subscription<String>>,
@@ -115,7 +115,7 @@ pub mod torrent {
         }
 
         pub async fn add_torrent_to_watchlist(&mut self, argument: String) -> Result<String, String> {
-            let err_str = "Regez format error. Use: addtowatchlist: <regex>";
+            let err_str = "Regex format error. Use: addtowatchlist: <regex>";
             if let Ok(rgx) = Regex::new(argument.as_str()) {
                 self.torrent_match_regex_list.push(rgx);
                 self.options.lock().unwrap().add_dl_regex(argument.clone()).await;

@@ -11,6 +11,7 @@ mod irc_processor;
 mod command_processor;
 mod torrent_processor;
 mod config;
+mod clients;
 
 static IRC_CONFIG_FILE: &str = "irc.toml";
 static OPTIONS_CONFIG_FILE: &str = "options.toml";
