@@ -34,7 +34,7 @@ pub mod config {
             let default = Defaults {
                 options_defaults: OptionData {
                     rss_key: "XXXXXXXXXXXXXX".to_string(),
-                    rtorrent_xmlrpc_url: "http://127.0.0.1:5000/".to_string(),
+                    rtorrent_xmlrpc_url: "unix://config/.local/share/rtorrent/rtorrent.sock".to_string(),
                     regex_for_downloads_match: [
                         "Some Regex to match.*1080p.*".to_string(),
                         "Another Release.*S02.*1080p.*WEB.*".to_string()

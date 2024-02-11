@@ -1,18 +1,20 @@
 pub mod torrent {
     use std::fs::File;
     use std::io;
-    //use std::ops::{Deref, DerefMut};
     use std::path::PathBuf;
     use std::sync::{Arc, Mutex};
+
     use base64;
     use base64::{Engine as _, engine::general_purpose};
-    use dxr::client::{Client, ClientBuilder, Url, Call};
-    use tokio::fs;
+    use dxr_client::{Call, Client, ClientBuilder, ClientError, Url};
     use lava_torrent::torrent::v1::Torrent;
     use log::{error, info};
     use pub_sub::{PubSub, Subscription};
     use regex::Regex;
+    use tokio::fs;
+
     use crate::config::config::Config;
+    // use crate::clients::*;
 
     pub struct TorrentProcessor {
         evt_channel: PubSub<String>,
@@ -45,7 +47,8 @@ pub mod torrent {
                 .user_agent("dxr-client-example")
                 .build();
             let request = Call::new("d.multicall2", ("main", "d.get_name=", "d.get_base_path=", "d.get_size_bytes=", "d.get_creation_date=", "d.get_custom=addtime="));
-            let result = client.call(request).await as Result<String, anyhow::Error>;
+            let xml_rpc = request.as_xml_rpc().unwrap();
+            let result: Result<String, ClientError> = client.call(request).await;
             match result {
                 Ok(r) => {
                     info!("Torrent load result: {r:?}");
@@ -65,7 +68,7 @@ pub mod torrent {
             if let Ok(bytes) = &general_purpose::STANDARD_NO_PAD.decode(file.as_bytes()) {
                 let request = Call::new("load.raw_start_verbose", ("", bytes.as_slice()));
                 // let request = dxr::client::Call::new("load.raw_start_verbose", file);
-                let result = client.call(request).await as Result<i32, anyhow::Error>;
+                let result: Result<i32, ClientError> = client.call(request).await;
                 let hasher = Torrent::read_from_bytes(bytes).unwrap();
                 let the_hash = hasher.info_hash();
                 match result {
@@ -77,8 +80,8 @@ pub mod torrent {
                         this line should be added to your .rtorrent.rc file for next line to work;
                         method.insert = fix_addtime, simple, "d.custom.set=addtime,(cat,$d.creation_date=)"
                         */
-                        let fix_time: Call<String, i32> = Call::new("fix_addtime", the_hash);
-                        match client.call(fix_time).await {
+                        let fix_time = Call::new("fix_addtime", the_hash);
+                        match client.call::<String, i32>(fix_time).await {
                             Ok(_) => info!("Time fixed for {}", name),
                             Err(e2) => error!("Error fixing time {:?},\n\t did you forget to add this line: \n\\t\t'{}'\n\t to your .rtorrent.rc file?", e2, "method.insert = fix_addtime, simple, \"d.custom.set=addtime,(cat,$d.creation_date=)\"")
                         }

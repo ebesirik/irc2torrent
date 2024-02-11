@@ -1,13 +1,9 @@
-[[irc2torrent]]
-name = "irc2torrent"
-version = "0.1.0"
-authors = ["Emre Besirik"]
-
 [package]
 name = "irc2torrent"
 description = "IRC bot that downloads torrents from IRC"
 version = "0.1.0"
 edition = "2021"
+authors = ["Emre Besirik"]
 
 [package.metadata.bundle.irc2torrent]
 name = "irc2torrent"
@@ -25,12 +21,14 @@ openssl = { version = "0.10.59", features = ["vendored"] }
 openssl-sys = { version = "0.9.95", features = ["vendored"] }
 irc = "0.15.0"
 futures = "0.3.29"
-tokio = { version = "1.34.0", features = ["full"] }
+tokio = { version = "1.34.0", features = ["full", "test-util"] }
 failure = "0.1.8"
 regex = "1.10.2"
 reqwest = { version = "0.11.22", features = ["json"] }
 base64 = "0.21.5"
-dxr = "0.5.0"
+#dxr = { path = "dxr" }
+dxr_client = { path = "dxr/dxr_client", features = ["reqwest", "multicall", "native-tls"] }
+dxr = { path = "dxr/dxr" }
 anyhow = "1.0.75"
 toml = "0.8.8"
 serde = "1.0.192"
@@ -43,3 +41,5 @@ log = "0.4.20"
 lava_torrent = "0.11.1"
 async-trait = { version = "0.1.73", features = [] }
 pub-sub = "*"
+tokio-scgi = "0.2.4"
+chrono = "0.4.34"
