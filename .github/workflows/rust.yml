@@ -19,11 +19,13 @@ jobs:
         config:
 #          - { name: "macOS Dev Build universal", artifact: "macOS-universal.dmg", os: macos-latest }
           - { name: "Linux Dev Build arm64", artifact: "linux-dev-arm64.tar.gz", os: ubuntu-latest }
-#          - { name: "Linux Dev Build x64", artifact: "linux-dev-x64.tar.gz", os: ubuntu-latest }
+          - { name: "Linux Dev Build x64", artifact: "linux-dev-x64.tar.gz", os: ubuntu-latest }
 #          - { name: "Windows Latest x64", artifact: "Windows-x64.zip", os: windows-latest, environment_script: "%programfiles(x86)%\\Microsoft Visual Studio\\2019\\Enterprise\\VC\\Auxiliary\\Build\\vcvars64.bat" }
 
     steps:
     - uses: actions/checkout@v3
+      with:
+        submodules: recursive
     - name: Rust Cache
       uses: Swatinem/rust-cache@v2.2.0
     - name: Install build target
@@ -35,6 +37,16 @@ jobs:
         ls -lah target/aarch64-unknown-linux-gnu/release
         mkdir irc2torrent
         cp target/aarch64-unknown-linux-gnu/release/irc2torrent irc2torrent/irc2torrent
+        cp irc.defaults.toml irc2torrent/irc.defaults.toml
+        cp options.toml irc2torrent/options.toml
+        tar -zcvf ${{ matrix.config.artifact }} irc2torrent/
+    - name: Build-linux x64
+      if: startsWith(matrix.config.os, 'ubuntu') && endsWith(matrix.config.name, 'x64')
+      run: |
+        cross build --release --verbose --target x86_64-unknown-linux-gnu
+        ls -lah target/x86_64-unknown-linux-gnu/release
+        mkdir irc2torrent
+        cp target/x86_64-unknown-linux-gnu/release/irc2torrent irc2torrent/irc2torrent
         cp irc.defaults.toml irc2torrent/irc.defaults.toml
         cp options.toml irc2torrent/options.toml
         tar -zcvf ${{ matrix.config.artifact }} irc2torrent/
