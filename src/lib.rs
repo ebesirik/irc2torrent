@@ -56,8 +56,8 @@ impl Irc2Torrent {
         Self { config, torrent_processor, command_processor: Box::new(command_processor), irc_processor: Box::new(irc_processor) }
     }
 
-    pub async fn start(&self, irc_processor: Arc<Mutex<IrcProcessor>>) {
-        irc_processor.lock().unwrap().start_listening().await;
+    pub async fn start(&self) {
+        self.irc_processor.lock().unwrap().start_listening().await;
     }
 
     async fn get_torrent_client(clients: &mut TorrentClientOption) -> TorrentClientsEnum {
