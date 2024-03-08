@@ -14,20 +14,20 @@ pub mod irc {
     use regex::Regex;
 
     use crate::command_processor::commands::CommandProcessor;
+    use crate::platforms::TorrentPlatform;
     use crate::torrent_processor::torrent::TorrentProcessor;
 
     pub struct IrcProcessor {
         evt_channel: PubSub<String>,
         subs_cfg: Vec<Subscription<String>>,
         config: Arc<Mutex<crate::config::config::Config>>,
-        release_catching_regex: Regex,
         tp: Arc<Mutex<TorrentProcessor>>,
         cp: Arc<Mutex<CommandProcessor>>,
     }
 
-    impl IrcProcessor {
-        pub fn new(cfg: Arc<Mutex<crate::config::config::Config>>, rcr: Regex, torrent_processor: Arc<Mutex<TorrentProcessor>>, command_processor: Arc<Mutex<CommandProcessor>>, evt_channel: PubSub<String>, subs_cfg: Vec<Subscription<String>>) -> Self {
-            Self { config: cfg, release_catching_regex: rcr, tp: torrent_processor, cp: command_processor, evt_channel, subs_cfg }
+    impl IrcProcessor {  
+        pub fn new(cfg: Arc<Mutex<crate::config::config::Config>>, torrent_processor: Arc<Mutex<TorrentProcessor>>, command_processor: Arc<Mutex<CommandProcessor>>, evt_channel: PubSub<String>, subs_cfg: Vec<Subscription<String>>) -> Self {
+            Self { config: cfg, tp: torrent_processor, cp: command_processor, evt_channel, subs_cfg }
         }
 
         pub async fn start_listening(&self) {
@@ -37,11 +37,8 @@ pub mod irc {
                         Ok(msg) => {
                             if let Some(message) = msg {
                                 if let (Command::PRIVMSG(channel, inner_message), Some(nick)) = (&message.command, &message.source_nickname()) {
-                                    println!("channel: {:?}", channel);
-                                    println!("message: {:?}", inner_message);
-                                    println!("source nick: {:?}", nick);
                                     info!("{}@{}: {}", nick, channel, inner_message);
-                                    if let Some(caps) = self.release_catching_regex.captures(inner_message) {
+                                    if let Some(caps) = self.config.lock().unwrap().get_announce_regex().captures(inner_message) {
                                         let (name, id) = (&caps["name"], &caps["id"]);
                                         info!("Torrent name: {}", name);
                                         info!("Torrent Id: {}", id);

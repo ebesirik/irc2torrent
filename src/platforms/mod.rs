@@ -7,3 +7,7 @@ pub trait TorrentPlatform {
     fn get_torrent_files_dir(&self) -> &PathBuf;
     async fn download_torrent(&self, name: String, id: String) -> Result<String, Error>;
 }
+
+pub(crate) enum TorrentPlatformsEnum {
+    TorrentLeech(tl::TorrentLeech),
+}

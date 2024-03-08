@@ -8,14 +8,15 @@ use log::info;
 use tokio::fs;
 use crate::platforms::TorrentPlatform;
 
-struct TorrentLeech {
+pub(crate) struct TorrentLeech {
     rss_key: String,
     torrent_dir: PathBuf,
 }
 
 impl TorrentLeech {
-    pub fn new(rss_key: String, torrent_dir: PathBuf) -> Self {
-        Self { rss_key, torrent_dir }
+    pub fn new(rss_key: String, torrent_dir: String) -> Self {
+        let td = PathBuf::from(torrent_dir);
+        Self { rss_key, torrent_dir: td }
     }
 }
 

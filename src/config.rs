@@ -1,75 +1,134 @@
 pub mod config {
-    //use std::collections::HashSet;
-    use serde_derive::{Deserialize, Serialize};
+    use std::path::PathBuf;
+
+    use anyhow::Error;
     use directories::BaseDirs;
-    use regex::Regex;
-    use tokio::{fs, io};
-    use std::path::{PathBuf};
-    //use std::rc::{Rc, Weak};
-    use serde::{de, ser};
-    //use std::sync::{Mutex};
     use log::{error, info};
+    use regex::Regex;
+    use serde::{de, ser};
+    use serde_derive::{Deserialize, Serialize};
+    use tokio::{fs, io};
+
     use crate::{IRC_CONFIG_FILE, OPTIONS_CONFIG_FILE};
 
     pub struct Config {
         option_data: OptionData,
         irc_data: irc::client::data::config::Config,
-        defaults: Defaults,
+    }
+    
+    impl Default for Config {
+        fn default() -> Self {
+            Self { option_data: OptionData::default(), irc_data: Config::get_irc_default_config() }
+        }
     }
 
-    #[derive(Serialize, Deserialize)]
+    #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
     pub struct OptionData {
-        rss_key: String,
-        rtorrent_xmlrpc_url: String,
+        platform: TorrentPlatforms,
+        clients: Vec<TorrentClientOption>,
         regex_for_downloads_match: Vec<String>,
+        regex_for_announce_match: String,
+    }
+    
+    impl Default for OptionData {
+        fn default() -> Self {
+            Self { 
+                platform: TorrentPlatforms::TorrentLeech(TorrentLeechOptions::default()), 
+                clients: vec![TorrentClientOption::rTorrent(rTorrentOptions::default()),
+                              TorrentClientOption::Flood(FloodOptions::default())], 
+                regex_for_downloads_match: vec!["Some Regex to match.*1080p.*".to_string(), "Another Release.*S02.*1080p.*WEB.*".to_string()],
+                regex_for_announce_match: r".*Name:'(?P<name>.*)' uploaded by.*https://www.torrentleech.org/torrent/(?P<id>\d+)".to_string()
+            }
+        }
     }
 
-    struct Defaults {
-        pub irc_defaults: irc::client::data::config::Config,
-        pub options_defaults: OptionData,
+    #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+    pub enum TorrentClientOption {
+        rTorrent(rTorrentOptions),
+        Flood(FloodOptions),
+    }
+
+    #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+    pub struct rTorrentOptions {
+        pub xmlrpc_url: String,
+    }
+    
+    impl Default for rTorrentOptions {
+        fn default() -> Self {
+            Self { xmlrpc_url: "unix://config/.local/share/rtorrent/rtorrent.sock".to_string() }
+        }
+    }
+
+    #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+    pub struct FloodOptions {
+        pub(crate) url: String,
+        pub(crate) username: String,
+        pub(crate) password: String,
+        pub(crate) destination: String,
+    }
+
+    impl Default for FloodOptions {
+        fn default() -> Self {
+            Self { url: "http://localhost:3000".to_string(), username: "admin".to_string(), password: "password".to_string(), destination: "/downloads".to_string() }
+        }
+    }
+        
+    #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+    pub enum TorrentPlatforms {
+        TorrentLeech(TorrentLeechOptions),
+    }
+    
+    #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+    pub struct TorrentLeechOptions {
+        pub(crate) rss_key: String,
+        pub(crate) torrent_dir: String,
+    }
+    
+    impl Default for TorrentLeechOptions {
+        fn default() -> Self {
+            Self { rss_key: "XXXXXXXX".to_string(), torrent_dir: "/tmp".to_string() }
+        }
     }
 
     impl Config {
-        pub async fn new() -> Result<Config, io::Error> {
-            let default = Defaults {
-                options_defaults: OptionData {
-                    rss_key: "XXXXXXXXXXXXXX".to_string(),
-                    rtorrent_xmlrpc_url: "unix://config/.local/share/rtorrent/rtorrent.sock".to_string(),
-                    regex_for_downloads_match: [
-                        "Some Regex to match.*1080p.*".to_string(),
-                        "Another Release.*S02.*1080p.*WEB.*".to_string()
-                    ].to_vec(),
-                },
-                irc_defaults: irc::client::data::config::Config {
-                    nickname: Some("irc2torrent".to_string()),
-                    nick_password: Some("password".to_string()),
-                    alt_nicks: vec!["irc2torrent_".to_string(), "irc2torrent__".to_string(), "irc2torrent___".to_string(), "irc2torrent____".to_string(), "irc2torrent_____".to_string(), "irc2torrent______".to_string()],
-                    username: Some("irc2torrent".to_string()),
-                    realname: Some("irc2torrent".to_string()),
-                    server: Some("irc.torrentleech.org".to_string()),
-                    port: Some(7011),
-                    channels: vec!["#tlannounces".to_string()],
-                    user_info: Some("I'm a bot user for the irc2torrent daemon.".to_string()),
-                    source: Some("https://github.com/ebesirik/irc2torrent".to_string()),
-                    ..irc::client::data::config::Config::default()
-                },
-            };
-            return if let (Some(option_config), Some(irc_config)) = (Config::read_or_create_toml::<OptionData>(OPTIONS_CONFIG_FILE.to_string(), Some(&default.options_defaults)).await,
-                                                                     Config::read_or_create_toml::<irc::client::data::config::Config>(IRC_CONFIG_FILE.to_string(), Some(&default.irc_defaults)).await) {
-                Ok(Self { option_data: option_config, irc_data: irc_config, defaults: default/*, subscribers: Mutex::new(HashSet::new())*/ })
+        pub async fn new() -> Result<Config, Error> {
+            return if let (Some(option_config), Some(irc_config)) = (Config::read_or_create_toml::<OptionData>(OPTIONS_CONFIG_FILE.to_string(), Some(&OptionData::default())).await,
+                                                                     Config::read_or_create_toml::<irc::client::data::config::Config>(IRC_CONFIG_FILE.to_string(), Some(&Self::get_irc_default_config())).await) {
+                Ok(Self { option_data: option_config, irc_data: irc_config/*, subscribers: Mutex::new(HashSet::new())*/ })
             } else {
-                Err(io::Error::new(io::ErrorKind::Other, "Could not read or create options file"))
+                Err(Error::msg("Could not read or create options file"))
             }
+        }
+        
+        fn get_irc_default_config() -> irc::client::data::config::Config {
+            return irc::client::data::config::Config {
+                nickname: Some("irc2torrent".to_string()),
+                nick_password: Some("password".to_string()),
+                alt_nicks: vec!["irc2torrent_".to_string(), "irc2torrent__".to_string(), "irc2torrent___".to_string(), "irc2torrent____".to_string(), "irc2torrent_____".to_string(), "irc2torrent______".to_string()],
+                username: Some("irc2torrent".to_string()),
+                realname: Some("irc2torrent".to_string()),
+                server: Some("irc.torrentleech.org".to_string()),
+                port: Some(7011),
+                channels: vec!["#tlannounces".to_string()],
+                user_info: Some("I'm a bot user for the irc2torrent daemon.".to_string()),
+                source: Some("https://github.com/ebesirik/irc2torrent".to_string()),
+                ..irc::client::data::config::Config::default()
+            };
+        }
+        
+        pub fn get_torrent_client(&mut self) -> TorrentClientOption {
+            return self.option_data.clients.first_mut().unwrap().clone();
+        }
+        
+        pub fn get_torrent_platform(&self) -> &TorrentPlatforms {
+            return &self.option_data.platform;
+        }
+        
+        pub fn get_announce_regex(&self) -> Regex {
+            return Regex::new(&self.option_data.regex_for_announce_match.as_str()).unwrap();
         }
 
         pub fn get_dl_regexes(&self) -> Vec<Regex> {
-            /*let mut torrent_names_regexes: Vec<Regex> = self.option_data.regex_for_downloads_match.iter().filter_map(|regex| Regex::new(regex.as_str()).ok()).collect();
-            let mut torrent_names_regexes: Vec<Regex> = Vec::new();
-            for downloads_match in &self.option_data.regex_for_downloads_match {
-                if let Ok(dr) = Regex::new(downloads_match.as_str()) {
-                    torrent_names_regexes.push(dr);
-                }
-            }*/
             return self.option_data.regex_for_downloads_match.iter().filter_map(|regex| Regex::new(regex.as_str()).ok()).collect();
         }
 
@@ -81,14 +140,6 @@ pub mod config {
         pub async fn remove_dl_regex(&mut self, regex: usize) {
             self.option_data.regex_for_downloads_match.remove(regex);
             let _ = self.update_option_file(OPTIONS_CONFIG_FILE.to_string(), &self.option_data).await;
-        }
-
-        pub fn get_rss_key(&self) -> String {
-            return self.option_data.rss_key.clone();
-        }
-
-        pub fn get_xmlrpc_url(&self) -> String {
-            return self.option_data.rtorrent_xmlrpc_url.clone();
         }
 
         pub fn get_irc_config(&self) -> irc::client::data::Config {

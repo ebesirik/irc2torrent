@@ -8,6 +8,7 @@ pub mod commands {
     use regex::Regex;
 
     use crate::Config;
+    use crate::platforms::TorrentPlatform;
     use crate::torrent_processor::torrent::TorrentProcessor;
 
     pub struct CommandProcessor {
@@ -16,16 +17,14 @@ pub mod commands {
         config: Arc<Mutex<Config>>,
         tp: Arc<Mutex<TorrentProcessor>>,
         command_catching_regex: Regex,
-        announce_regex: Regex,
     }
 
     impl CommandProcessor {
-        pub fn new(cfg: Arc<Mutex<Config>>, torrent_processor: Arc<Mutex<TorrentProcessor>>, announce_regex: Regex, evt_channel: PubSub<String>, subs_cfg: Vec<Subscription<String>>) -> Self {
+        pub fn new(cfg: Arc<Mutex<Config>>, torrent_processor: Arc<Mutex<TorrentProcessor>>, evt_channel: PubSub<String>, subs_cfg: Vec<Subscription<String>>) -> Self {
             Self {
                 config: cfg,
                 command_catching_regex: Regex::new("(?P<command>[a-z]):(?P<params>.*)").unwrap(),
                 tp: torrent_processor,
-                announce_regex,
                 evt_channel,
                 subs_cfg,
             }
@@ -97,14 +96,13 @@ pub mod commands {
 
         async fn add_torrent(&self, argument: &str) -> Result<String, String> {
             let err_str = "Wrong argument format. Use: addtorrent <torrent name> <torrent id>";
-            if let Some(caps) = self.announce_regex.captures(argument) {
-                return self.tp.clone().lock().unwrap().add_torrent(&caps["name"], &caps["id"]).await;
+            if let Some(caps) = self.config.lock().unwrap().get_announce_regex().captures(argument) {
+                return self.tp.lock().unwrap().add_torrent(&caps["name"], &caps["id"]).await;
             }
             Err(err_str.to_string())
         }
 
         async fn add_torrent_to_watchlist(&self, argument: &str) -> Result<String, String> {
-            // let tp = self.tp.clone();
             return self.tp.lock().unwrap().add_torrent_to_watchlist(argument.to_owned()).await;
         }
     }

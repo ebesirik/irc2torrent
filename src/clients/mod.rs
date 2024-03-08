@@ -1,25 +1,19 @@
 use std::fmt::Debug;
-use anyhow::Error;
+use std::future::Future;
+
 use base64::Engine;
 use chrono::{DateTime, Local};
 
 pub mod rtorrent;
 pub mod flood;
 
-pub trait TorrentClient {
-    async fn get_dl_list(&mut self) -> Result<Vec<DownloadResult>, Error>;
-    async fn add_torrent_and_start(&mut self, file: String, name: String) -> Result<(), Error>;
-    /*async fn add_torrent(&self, name: &str, id: &str) -> Result<String, String> {
-        if let Ok(b64) = self.download_torrent(name.to_string(), id.to_string()).await {
-            self.add_torrent_and_start(b64, name.to_string()).await;
-            return Ok(format!("Torrent {} added to rtorrent", name));
-        }
-        Err("Can not download torrent file".to_string())
-    }*/
+pub enum TorrentClientsEnum {
+    Rtorrent(rtorrent::rTorrent),
+    Flood(flood::Flood),
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Clone, PartialEq, Eq, Hash, Default)]
-struct DownloadResult {
+pub struct DownloadResult {
     name: String,
     size: i64,
     creation_date: i64,
