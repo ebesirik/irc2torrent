@@ -8,6 +8,7 @@ pub mod commands {
     use regex::Regex;
 
     use crate::Config;
+    use crate::config::config::SecurityMode;
     use crate::platforms::TorrentPlatform;
     use crate::torrent_processor::torrent::TorrentProcessor;
 
@@ -17,18 +18,45 @@ pub mod commands {
         config: Arc<Mutex<Config>>,
         tp: Arc<Mutex<TorrentProcessor>>,
         command_catching_regex: Regex,
+        pwd_regex: Regex,
     }
 
     impl CommandProcessor {
         pub fn new(cfg: Arc<Mutex<Config>>, torrent_processor: Arc<Mutex<TorrentProcessor>>, evt_channel: PubSub<String>, subs_cfg: Vec<Subscription<String>>) -> Self {
             Self {
                 config: cfg,
-                command_catching_regex: Regex::new("(?P<command>[a-z]):(?P<params>.*)").unwrap(),
+                command_catching_regex: Regex::new(r"cmd:(?P<command>\w+)(?: params:\((?P<params>.*)\))?").unwrap(),
+                pwd_regex: Regex::new(r"auth:\[(?P<password>.*)\]").unwrap(),
                 tp: torrent_processor,
                 evt_channel,
                 subs_cfg,
             }
         }
+        
+        pub fn authenticate(&self, user: &str, msg: &str) -> bool {
+            let uname = self.config.lock().unwrap().get_security_mode();
+            match self.config.lock().unwrap().get_security_mode() {
+                SecurityMode::IrcUserName(ref u) => {
+                    if user == u {
+                        return true;
+                    }
+                }
+                SecurityMode::Password(ref p) => {
+                    if let Some(caps) = self.pwd_regex.captures(msg) {
+                        let password = &caps["password"];
+                        if password == p {
+                            return true;
+                        }
+                    }
+                }
+            }
+            false
+        }
+        
+        pub fn is_command(&self, msg: &str) -> bool {
+            self.command_catching_regex.is_match(msg)
+        }
+        
         //generate functions for CRUD operations on borrowed options from supplied message string as parameter if string is a valid command
         //return true if command was found and executed, false otherwise
         pub async fn process_command(&self, message: String) -> Result<String, String> {

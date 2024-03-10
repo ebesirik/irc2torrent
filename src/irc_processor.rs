@@ -14,6 +14,7 @@ pub mod irc {
     use regex::Regex;
 
     use crate::command_processor::commands::CommandProcessor;
+    use crate::config::config::SecurityMode;
     use crate::platforms::TorrentPlatform;
     use crate::torrent_processor::torrent::TorrentProcessor;
 
@@ -23,31 +24,48 @@ pub mod irc {
         config: Arc<Mutex<crate::config::config::Config>>,
         tp: Arc<Mutex<TorrentProcessor>>,
         cp: Arc<Mutex<CommandProcessor>>,
+        client: Arc<Mutex<Option<Client>>>,
     }
 
-    impl IrcProcessor {  
+    impl IrcProcessor {
         pub fn new(cfg: Arc<Mutex<crate::config::config::Config>>, torrent_processor: Arc<Mutex<TorrentProcessor>>, command_processor: Arc<Mutex<CommandProcessor>>, evt_channel: PubSub<String>, subs_cfg: Vec<Subscription<String>>) -> Self {
-            Self { config: cfg, tp: torrent_processor, cp: command_processor, evt_channel, subs_cfg }
+            Self { config: cfg, tp: torrent_processor, cp: command_processor, evt_channel, subs_cfg, client: Arc::new(Mutex::new(None)) }
         }
 
-        pub async fn start_listening(&self) {
+        pub async fn start_listening(&mut self) {
             if let Some(mut ok_stream) = self.connect_irc().await {
                 loop {
                     match ok_stream.next().await.transpose() {
-                        Ok(msg) => {
-                            if let Some(message) = msg {
-                                if let (Command::PRIVMSG(channel, inner_message), Some(nick)) = (&message.command, &message.source_nickname()) {
-                                    info!("{}@{}: {}", nick, channel, inner_message);
-                                    if let Some(caps) = self.config.lock().unwrap().get_announce_regex().captures(inner_message) {
-                                        let (name, id) = (&caps["name"], &caps["id"]);
-                                        info!("Torrent name: {}", name);
-                                        info!("Torrent Id: {}", id);
-                                        if self.tp.lock().unwrap().do_we_want_this_torrent(&name.to_string()) {
-                                            if let Ok(b64) = self.tp.lock().unwrap().download_torrent(name.to_string(), id.to_string()).await {
-                                                self.tp.lock().unwrap().add_torrent_and_start(b64, name.to_string()).await;
-                                            }
-                                            break;
+                        Ok(Some(msg)) => {
+                            if let (Command::PRIVMSG(channel, inner_message), Some(nick)) = (&msg.command, &msg.source_nickname()) {
+                                info!("{}@{}: {}", nick, channel, inner_message);
+                                if let Some(caps) = self.config.lock().unwrap().get_announce_regex().captures(inner_message) {
+                                    let (name, id) = (&caps["name"], &caps["id"]);
+                                    info!("Torrent name: {}", name);
+                                    info!("Torrent Id: {}", id);
+                                    if self.tp.lock().unwrap().do_we_want_this_torrent(&name.to_string()) {
+                                        if let Ok(b64) = self.tp.lock().unwrap().download_torrent(name.to_string(), id.to_string()).await {
+                                            self.tp.lock().unwrap().add_torrent_and_start(b64, name.to_string()).await;
                                         }
+                                        break;
+                                    }
+                                } else {
+                                    if self.cp.lock().unwrap().is_command(inner_message) {
+                                        if self.config.lock().unwrap().is_commands_enabled() {
+                                            if self.cp.lock().unwrap().authenticate(nick, &inner_message) {
+                                                if let Ok(result) = self.cp.lock().unwrap().process_command(inner_message.to_string()).await {
+                                                    let _ = self.client.clone().lock().unwrap().as_ref().unwrap().send_privmsg(channel, result);
+                                                } else {
+                                                    let _ = self.client.clone().lock().unwrap().as_ref().unwrap().send_privmsg(channel, "Command not found.");
+                                                }
+                                            } else {
+                                                let _ = self.client.clone().lock().unwrap().as_ref().unwrap().send_privmsg(channel, "You are not authorized to use this bot.");
+                                            }
+                                        } else {
+                                            let _ = self.client.clone().lock().unwrap().as_ref().unwrap().send_privmsg(channel, "Commands are disabled.");
+                                        }
+                                    } else {
+                                        info!("Message is not a torrent or a command. ({nick}: {inner_message})");
                                     }
                                 }
                             }
@@ -63,16 +81,18 @@ pub mod irc {
                                 error!("{:?}", e);
                             }
                         }
+                        _ => {}
                     }
                 }
             }
         }
 
-        pub async fn connect_irc(&self) -> Option<ClientStream> {
+        pub async fn connect_irc(&mut self) -> Option<ClientStream> {
             let cli: Option<ClientStream> = match Client::from_config(self.config.lock().unwrap().get_irc_config().clone()).await {
                 Ok(mut c) => {
                     if let Ok(_) = c.identify() {
                         if let Ok(cs) = c.stream() {
+                            self.client = Arc::new(Mutex::new(Some(c)));
                             Some(cs)
                         } else {
                             None

@@ -43,3 +43,4 @@ async-trait = { version = "0.1.77", features = [] }
 pub-sub = "*"
 tokio-scgi = "0.2.4"
 chrono = "0.4.34"
+clap = "4.5.2"

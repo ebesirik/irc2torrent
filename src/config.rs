@@ -26,6 +26,7 @@ pub mod config {
     pub struct OptionData {
         platform: TorrentPlatforms,
         clients: Vec<TorrentClientOption>,
+        command_options: CommandOptions,
         regex_for_downloads_match: Vec<String>,
         regex_for_announce_match: String,
     }
@@ -36,10 +37,29 @@ pub mod config {
                 platform: TorrentPlatforms::TorrentLeech(TorrentLeechOptions::default()), 
                 clients: vec![TorrentClientOption::rTorrent(rTorrentOptions::default()),
                               TorrentClientOption::Flood(FloodOptions::default())], 
+                command_options: CommandOptions::default(),
                 regex_for_downloads_match: vec!["Some Regex to match.*1080p.*".to_string(), "Another Release.*S02.*1080p.*WEB.*".to_string()],
                 regex_for_announce_match: r".*Name:'(?P<name>.*)' uploaded by.*https://www.torrentleech.org/torrent/(?P<id>\d+)".to_string()
             }
         }
+    }
+
+    #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+    pub struct CommandOptions {
+        security_mode: SecurityMode,
+        commands_enabled: bool,
+    }
+    
+    impl Default for CommandOptions {
+        fn default() -> Self {
+            Self { security_mode: SecurityMode::IrcUserName("irc2torrent".to_string()), commands_enabled: false }
+        }
+    }
+
+    #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+    pub enum SecurityMode {
+        Password(String),
+        IrcUserName(String),
     }
 
     #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -114,6 +134,14 @@ pub mod config {
                 source: Some("https://github.com/ebesirik/irc2torrent".to_string()),
                 ..irc::client::data::config::Config::default()
             };
+        }
+        
+        pub fn is_commands_enabled(&self) -> bool {
+            return self.option_data.command_options.commands_enabled;
+        }
+        
+        pub fn get_security_mode(&self) -> &SecurityMode {
+            return &self.option_data.command_options.security_mode;
         }
         
         pub fn get_torrent_client(&mut self) -> TorrentClientOption {
