@@ -17,18 +17,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Extract version
-        id: extract_version
-        run: |
-          if [[ $GITHUB_REF == refs/tags/* ]]; then
-          VERSION=${GITHUB_REF#refs/tags/}
-          else
-          VERSION=latest
-          fi
-          echo "::set-output name=VERSION::$VERSION"
+      - id: get_version
+        name: Get version
+        uses: jannemattila/get-version-from-tag@v3
 
       - name: Build Docker image
-        run: docker build -t ebesirik/flood_rtorrent_irc2torrent:${{ steps.extract_version.outputs.VERSION }} -t ebesirik/flood_rtorrent_irc2torrent:latest .
+        run: docker build -t ebesirik/flood_rtorrent_irc2torrent:${{ steps.get_version.outputs.version }} -t ebesirik/flood_rtorrent_irc2torrent:latest .
 
       - name: Login to DockerHub
         uses: docker/login-action@v1
