@@ -21,11 +21,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Set env
-        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
-
+      - name: Set output
+        id: vars
+        run: echo "tag=${GITHUB_REF#refs/*/}" >> $GITHUB_OUTPUT
+        
       - name: Build Docker image
-        run: docker build -t ebesirik/flood_rtorrent_irc2torrent:${{ env.RELEASE_VERSION }} -t ebesirik/flood_rtorrent_irc2torrent:latest .
+        env:
+          RELEASE_VERSION: ${{ steps.vars.outputs.tag }}
+        run: |
+          echo $RELEASE_VERSION
+          docker build -t ebesirik/flood_rtorrent_irc2torrent:${{ steps.vars.outputs.tag }} -t ebesirik/flood_rtorrent_irc2torrent:latest .
 
       - name: Login to DockerHub
         uses: docker/login-action@v1
