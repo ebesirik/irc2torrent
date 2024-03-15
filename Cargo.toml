@@ -3,6 +3,11 @@ name = "irc2torrent"
 description = "IRC bot that downloads torrents from IRC"
 version = "0.1.9"
 edition = "2021"
+license = "MIT"
+license-file = "none yet"
+documentation = "none yet"
+homepage = "https://github.com/ebesirik/irc2torrent"
+repository = "https://github.com/ebesirik/irc2torrent"
 authors = ["Emre Besirik"]
 
 [package.metadata.bundle.irc2torrent]
