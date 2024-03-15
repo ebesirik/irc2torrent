@@ -73,8 +73,10 @@ pub mod irc {
                         Err(e) => {
                             if e.type_id() == Error::PingTimeout.type_id() {
                                 if let Some(stream) = self.connect_irc().await {
+                                    info!("Reconnected to IRC server.");
                                     ok_stream = stream;
                                 } else {
+                                    error!("Could not reconnect to IRC server.");
                                     let _ = task::sleep(time::Duration::from_secs(1));
                                 }
                             } else {
@@ -93,15 +95,21 @@ pub mod irc {
                     if let Ok(_) = c.identify() {
                         if let Ok(cs) = c.stream() {
                             self.client = Arc::new(Mutex::new(Some(c)));
+                            info!("Connected to IRC server.");
                             Some(cs)
                         } else {
+                            error!("Could not get client stream.");
                             None
                         }
                     } else {
+                        error!("Could not identify with server.");
                         None
                     }
                 }
-                Err(_) => None
+                Err(_) => {
+                    error!("Could not connect to IRC server.");
+                    None
+                }
             };
             cli
         }
