@@ -40,7 +40,7 @@ jobs:
 
       - name: Push Docker image
         run: |
-          docker push ebesirik/flood_rtorrent_irc2torrent:${{ steps.extract_version.outputs.VERSION }}
+          docker push ebesirik/flood_rtorrent_irc2torrent:${{ steps.vars.outputs.tag }}
           docker push ebesirik/flood_rtorrent_irc2torrent:latest
   build:
     name: ${{ matrix.config.name }}
