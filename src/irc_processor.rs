@@ -87,6 +87,7 @@ pub mod irc {
                                     error!("{:?}", e);
                                 }
                             }
+                            _ => {}
                         }
                     }
                 } else {
