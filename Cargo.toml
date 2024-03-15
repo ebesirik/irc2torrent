@@ -16,6 +16,9 @@ authors = ["Emre Besirik"]
 version = "1.12.0"
 features = ["attributes"]
 
+[dev-dependencies]
+cargo-release = "0.25.6"
+
 [dependencies]
 openssl = { version = "0.10.59", features = ["vendored"] }
 openssl-sys = { version = "0.9.95", features = ["vendored"] }
