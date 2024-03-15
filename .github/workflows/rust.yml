@@ -3,8 +3,12 @@ name: Rust
 on:
   push:
     branches: [ "main" ]
+    tags: 
+      - "*.*.*"
   pull_request:
     branches: [ "main" ]
+    tags:
+      - "*.*.*"
 
 env:
   CARGO_TERM_COLOR: always
@@ -17,12 +21,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - id: get_version
-        name: Get version
-        uses: jannemattila/get-version-from-tag@v3
+      - name: Set env
+        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
 
       - name: Build Docker image
-        run: docker build -t ebesirik/flood_rtorrent_irc2torrent:${{ steps.get_version.outputs.version }} -t ebesirik/flood_rtorrent_irc2torrent:latest .
+        run: docker build -t ebesirik/flood_rtorrent_irc2torrent:${{ env.RELEASE_VERSION }} -t ebesirik/flood_rtorrent_irc2torrent:latest .
 
       - name: Login to DockerHub
         uses: docker/login-action@v1
