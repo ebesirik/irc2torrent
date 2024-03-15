@@ -21,7 +21,7 @@ jobs:
 
       - name: Set output
         id: vars
-        run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        run: echo "tag=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
         
       - name: Build Docker image
         env:
