@@ -106,8 +106,8 @@ pub mod irc {
                         None
                     }
                 }
-                Err(_) => {
-                    error!("Could not connect to IRC server.");
+                Err(e) => {
+                    error!("Could not connect to IRC server.{e:?}");
                     None
                 }
             };
