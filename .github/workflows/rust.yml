@@ -19,7 +19,13 @@ jobs:
 
       - name: Extract version
         id: extract_version
-        run: echo "::set-output name=VERSION::${GITHUB_REF#refs/tags/}"
+        run: |
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+          VERSION=${GITHUB_REF#refs/tags/}
+          else
+          VERSION=latest
+          fi
+          echo "::set-output name=VERSION::$VERSION"
 
       - name: Build Docker image
         run: docker build -t ebesirik/flood_rtorrent_irc2torrent:${{ steps.extract_version.outputs.VERSION }} -t ebesirik/flood_rtorrent_irc2torrent:latest .
