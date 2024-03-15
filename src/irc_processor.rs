@@ -55,17 +55,24 @@ pub mod irc {
                                         }
                                     } else {
                                         if self.cp.lock().unwrap().is_command(inner_message) {
+                                            info!("Message is a command. ({nick}: {inner_message})");
                                             if self.config.lock().unwrap().is_commands_enabled() {
+                                                info!("Commands are enabled.");
                                                 if self.cp.lock().unwrap().authenticate(nick, &inner_message) {
+                                                    info!("User is authenticated.");
                                                     if let Ok(result) = self.cp.lock().unwrap().process_command(inner_message.to_string()).await {
+                                                        info!("Command result: {}", result);
                                                         let _ = self.client.clone().lock().unwrap().as_ref().unwrap().send_privmsg(channel, result);
                                                     } else {
+                                                        error!("Command failed.");
                                                         let _ = self.client.clone().lock().unwrap().as_ref().unwrap().send_privmsg(channel, "Command not found.");
                                                     }
                                                 } else {
+                                                    error!("User is not authenticated.");
                                                     let _ = self.client.clone().lock().unwrap().as_ref().unwrap().send_privmsg(channel, "You are not authorized to use this bot.");
                                                 }
                                             } else {
+                                                error!("Commands are disabled.");
                                                 let _ = self.client.clone().lock().unwrap().as_ref().unwrap().send_privmsg(channel, "Commands are disabled.");
                                             }
                                         } else {
@@ -87,7 +94,9 @@ pub mod irc {
                                     error!("{:?}", e);
                                 }
                             }
-                            _ => {}
+                            _ => {
+                                error!("Something unexpected came from IRC server.");
+                            }
                         }
                     }
                 } else {
@@ -126,5 +135,17 @@ pub mod irc {
             };
             cli
         }
+    }
+}
+
+#[cfg(test)]
+pub mod test {
+    
+    #[tokio::test]
+    pub async fn test_regex() {
+        let re: regex::Regex = regex::Regex::new(r".*Name:'(?P<name>.*)' uploaded by.*https://www.torrentleech.org/torrent/(?P<id>\d+)").unwrap();
+        let caps = re.captures("New Torrent Announcement: <TV :: BoxSets>  Name:'Secrets of Sulphur Springs S01 1080p AMZN WEB-DL DDP5 1 H 264-TVSmash' uploaded by 'Anonymous' freeleech -  https://www.torrentleech.org/torrent/241240312").unwrap();
+        assert_eq!(&caps["name"], "Secrets of Sulphur Springs S01 1080p AMZN WEB-DL DDP5 1 H 264-TVSmash");
+        assert_eq!(&caps["id"], "241240312");
     }
 }
