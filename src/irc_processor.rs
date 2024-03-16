@@ -57,11 +57,11 @@ pub mod irc {
                                                 match self.tp.add_torrent_and_start(b64, name.to_string()).await {
                                                     Ok(_) => {
                                                         info!("Torrent added to client.");
-                                                        let _ = self.send_privmsg(channel, "Torrent added to client.");
+                                                        let _ = self.send_privmsg(nick, channel, "Torrent added to client.");
                                                     }
                                                     Err(e) => {
                                                         error!("Could not add torrent to client. {:?}", e);
-                                                        let _ = self.send_privmsg(channel, format!("Could not add torrent to client. Error was: {:?}", e).as_str());
+                                                        let _ = self.send_privmsg(nick, channel, format!("Could not add torrent to client. Error was: {:?}", e).as_str());
                                                     }
                                                 }
                                             }
