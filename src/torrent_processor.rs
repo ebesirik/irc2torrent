@@ -1,4 +1,5 @@
 pub mod torrent {
+    use std::cell::RefCell;
     use std::rc::Rc;
     use std::sync::{Arc, Mutex};
 
@@ -6,6 +7,7 @@ pub mod torrent {
     use base64;
     use base64::Engine as _;
     use pub_sub::{PubSub, Subscription};
+    use regex::Regex;
 
     use crate::clients::{DownloadResult, TorrentClientsEnum};
     use crate::config::config::Config;
@@ -18,29 +20,32 @@ pub mod torrent {
         subs_cfg: Vec<Subscription<String>>,
         torrent_client: TorrentClientsEnum,
         torrent_platform: TorrentPlatformsEnum,
-        options: Rc<Mutex<Config>>,
+        options: Rc<RefCell<Config>>,
+        // dl_regexes: Vec<Regex>,
     }
 
     impl TorrentProcessor
     {
         pub fn new(
-            config: Rc<Mutex<Config>>,
+            config: Rc<RefCell<Config>>,
             evt_channel: PubSub<String>,
             subs_cfg: Vec<Subscription<String>>,
             torrent_client: TorrentClientsEnum,
             torrent_platform: TorrentPlatformsEnum,
         ) -> TorrentProcessor {
+            // let dl_regex = config.lock().unwrap().get_dl_regexes().clone();
             Self {
                 evt_channel,
                 subs_cfg,
                 torrent_client,
                 torrent_platform,
                 options: config,
+                // dl_regexes: dl_regex,
             }
         }
 
         pub fn do_we_want_this_torrent(&self, name: &String) -> bool {
-            let torrent_match_regex_list = self.options.lock().unwrap().get_dl_regexes();
+            let torrent_match_regex_list = self.options.borrow().get_dl_regexes();
             for regex in &torrent_match_regex_list {
                 if regex.is_match(name) {
                     return true;
@@ -57,7 +62,7 @@ pub mod torrent {
             Ok(list.to_owned())
         }
 
-        pub async fn add_torrent_and_start(&mut self, file: String, name: String) {
+        pub async fn add_torrent_and_start(&self, file: String, name: String) {
             match &self.torrent_client {
                 TorrentClientsEnum::Rtorrent(c) => { c.add_torrent_and_start(&file, name).await.expect("TODO: panic message")},
                 TorrentClientsEnum::Flood(c) => { c.add_torrent_and_start(&file, name).await.expect("TODO: panic message") }
@@ -66,13 +71,13 @@ pub mod torrent {
 
         pub async fn download_torrent(&self, name: String, id: String) -> Result<String, Error> {
             if let TorrentLeech(tl) = &self.torrent_platform {
-                return Ok(tl.download_torrent(name, id).await?);
+                return tl.download_torrent(name, id).await;
             } else { 
                 return Err(Error::msg("Torrent platform not supported"));
             }
         }
 
-        pub async fn add_torrent(&mut self, name: &str, id: &str) -> Result<String, String> {
+        pub async fn add_torrent(&self, name: &str, id: &str) -> Result<String, String> {
             let tp = match &self.torrent_platform {
                 TorrentPlatformsEnum::TorrentLeech(c) => c.download_torrent(name.to_string(), id.to_string())
                     .await,
@@ -91,20 +96,19 @@ pub mod torrent {
         }
 
         pub async fn add_torrent_to_watchlist(
-            &mut self,
+            &self,
             argument: String,
         ) -> Result<String, String> {
             self.options
-                .lock()
-                .unwrap()
+                .borrow_mut()
                 .add_dl_regex(argument.clone())
                 .await;
             return Ok(format!("Torrent {} added to watch list", argument));
         }
 
-        pub fn remove_torrent_from_watchlist(&mut self, index: usize) -> Result<String, String> {
-            if index < self.options.lock().unwrap().get_dl_regexes().len() {
-                self.options.lock().unwrap().remove_dl_regex(index);
+        pub async fn remove_torrent_from_watchlist(&self, index: usize) -> Result<String, String> {
+            if index < self.options.borrow().get_dl_regexes().len() {
+                self.options.borrow_mut().remove_dl_regex(index).await;
                 return Ok(format!("Torrent {} removed from watch list", index));
             }
             Err("Index out of range".to_string())

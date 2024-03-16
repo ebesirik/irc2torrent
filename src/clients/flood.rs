@@ -103,6 +103,7 @@ impl Flood {
                 .send()
                 .await?;
             if !resp.status().is_success() {
+                println!("status: {} : {:?}", resp.status(), resp.text().await);
                 return Err(Error::msg( "Can not add torrent"));
             }
             response_text = resp.text().await.unwrap();

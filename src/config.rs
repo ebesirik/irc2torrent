@@ -1,9 +1,10 @@
 pub mod config {
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
+    use std::sync::Mutex;
 
     use anyhow::Error;
     use directories::BaseDirs;
-    use log::{error, info};
+    use log::{debug, error, info};
     use regex::Regex;
     use serde::{de, ser};
     use serde_derive::{Deserialize, Serialize};
@@ -12,13 +13,13 @@ pub mod config {
     use crate::{IRC_CONFIG_FILE, OPTIONS_CONFIG_FILE};
 
     pub struct Config {
-        option_data: OptionData,
+        option_data: Mutex<OptionData>,
         irc_data: irc::client::data::config::Config,
     }
     
     impl Default for Config {
         fn default() -> Self {
-            Self { option_data: OptionData::default(), irc_data: Config::get_irc_default_config() }
+            Self { option_data: Mutex::new(OptionData::default()), irc_data: Config::get_irc_default_config() }
         }
     }
 
@@ -114,7 +115,7 @@ pub mod config {
         pub async fn new() -> Result<Config, Error> {
             return if let (Some(option_config), Some(irc_config)) = (Config::read_or_create_toml::<OptionData>(OPTIONS_CONFIG_FILE.to_string(), Some(&OptionData::default())).await,
                                                                      Config::read_or_create_toml::<irc::client::data::config::Config>(IRC_CONFIG_FILE.to_string(), Some(&Self::get_irc_default_config())).await) {
-                Ok(Self { option_data: option_config, irc_data: irc_config/*, subscribers: Mutex::new(HashSet::new())*/ })
+                Ok(Self { option_data: Mutex::new(option_config), irc_data: irc_config/*, subscribers: Mutex::new(HashSet::new())*/ })
             } else {
                 Err(Error::msg("Could not read or create options file"))
             }
@@ -137,36 +138,36 @@ pub mod config {
         }
         
         pub fn is_commands_enabled(&self) -> bool {
-            return self.option_data.command_options.commands_enabled;
+            return self.option_data.lock().unwrap().command_options.commands_enabled.clone();
         }
         
-        pub fn get_security_mode(&self) -> &SecurityMode {
-            return &self.option_data.command_options.security_mode;
+        pub fn get_security_mode(&self) -> SecurityMode {
+            return self.option_data.lock().unwrap().command_options.security_mode.clone();
         }
         
         pub fn get_torrent_client(&mut self) -> TorrentClientOption {
-            return self.option_data.clients.first_mut().unwrap().clone();
+            return self.option_data.lock().unwrap().clients.first_mut().unwrap().clone();
         }
         
-        pub fn get_torrent_platform(&self) -> &TorrentPlatforms {
-            return &self.option_data.platform;
+        pub fn get_torrent_platform(&self) -> TorrentPlatforms {
+            return self.option_data.lock().unwrap().platform.clone();
         }
         
         pub fn get_announce_regex(&self) -> Regex {
-            return Regex::new(&self.option_data.regex_for_announce_match.as_str()).unwrap();
+            return Regex::new(&self.option_data.lock().unwrap().regex_for_announce_match.as_str().clone()).unwrap();
         }
 
         pub fn get_dl_regexes(&self) -> Vec<Regex> {
-            return self.option_data.regex_for_downloads_match.iter().filter_map(|regex| Regex::new(regex.as_str()).ok()).collect();
+            return self.option_data.lock().unwrap().regex_for_downloads_match.iter().filter_map(|regex| Regex::new(regex.as_str()).ok()).collect();
         }
 
         pub async fn add_dl_regex(&mut self, regex: String) {
-            self.option_data.regex_for_downloads_match.push(regex);
+            self.option_data.lock().unwrap().regex_for_downloads_match.push(regex);
             let _ = self.update_option_file(OPTIONS_CONFIG_FILE.to_string(), &self.option_data).await;
         }
 
         pub async fn remove_dl_regex(&mut self, regex: usize) {
-            self.option_data.regex_for_downloads_match.remove(regex);
+            self.option_data.lock().unwrap().regex_for_downloads_match.remove(regex);
             let _ = self.update_option_file(OPTIONS_CONFIG_FILE.to_string(), &self.option_data).await;
         }
 
@@ -178,29 +179,24 @@ pub mod config {
             where T: ser::Serialize, T: de::DeserializeOwned {
             if let Some(full_path_buf) = Config::get_full_config_path(filename.clone()) {
                 info!("You can edit the config file at '{}' location", full_path_buf.to_str()?);
+                debug!("You can edit the config file at '{}' location", full_path_buf.to_str()?);
                 return if full_path_buf.exists() {
                     let path = full_path_buf.as_path();
-                    let contents: String = match fs::read_to_string(path).await {
-                        Ok(c) => c,
-                        Err(_) => {
-                            error!("Could not read file `{}`", path.to_str()?);
-                            return None;
-                        }
-                    };
-                    match toml::from_str(&contents) {
-                        Ok(d) => d,
-                        Err(_) => {
-                            error!("Unable to load data from `{}`", path.to_str()?);
-                            return None;
-                        }
-                    }
+                    Self::read_file_to_toml::<T>(path).await
                 } else {
                     if let Some(result) = data {
                         let toml = toml::to_string(result).unwrap();
                         let path = full_path_buf.as_path();
                         match fs::write(path, toml).await {
-                            Ok(_) => info!("New options file created at '{}' location, please consider modifying it before running to app.", path.to_str()?),
-                            Err(_) => error!("Error creating {} file", path.to_str()?)
+                            Ok(_) => {
+                                info!("New options file created at '{}' location, please consider modifying it before running to app.", path.to_str()?);
+                                debug!("New options file created at '{}' location, please consider modifying it before running to app.", path.to_str()?);
+                                Self::read_file_to_toml::<T>(path).await
+                            },
+                            Err(_) => {
+                                error!("Error creating {} file", path.to_str()?);
+                                None
+                            }
                         };
                     }
                     None
@@ -208,6 +204,24 @@ pub mod config {
             }
 
             return None;
+        }
+        
+        async fn read_file_to_toml<T>(path: &Path) -> Option<T>
+            where T: ser::Serialize, T: de::DeserializeOwned {
+            let contents: String = match fs::read_to_string(path).await {
+                Ok(c) => c,
+                Err(_) => {
+                    error!("Could not read file `{}`", path.to_str()?);
+                    return None;
+                }
+            };
+            match toml::from_str(&contents) {
+                Ok(d) => d,
+                Err(_) => {
+                    error!("Unable to load data from `{}`", path.to_str()?);
+                    return None;
+                }
+            }
         }
 
         fn get_full_config_path(filename: String) -> Option<PathBuf> {

@@ -37,7 +37,7 @@ impl TorrentPlatform for TorrentLeech {
                 let mut slice: &[u8] = bytes.as_ref();
                 let mut out = File::create(self.get_torrent_files_dir().join(torrent_file)).expect("Failed file create");
                 let _ = io::copy(&mut slice, &mut out);
-                return Ok(general_purpose::STANDARD_NO_PAD.encode(bytes.as_ref()));
+                return Ok(general_purpose::STANDARD.encode(bytes.as_ref()));
             }
         }
         Err(Error::msg("Failed to download file"))

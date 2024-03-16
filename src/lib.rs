@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
@@ -23,10 +24,10 @@ static OPTIONS_CONFIG_FILE: &str = "options.toml";
 
 
 pub struct Irc2Torrent {
-    config: Rc<Mutex<Config>>,
-    torrent_processor: Rc<Mutex<TorrentProcessor>>,
-    command_processor: Box<Rc<Mutex<CommandProcessor>>>,
-    irc_processor: Box<Rc<Mutex<IrcProcessor>>>,
+    config: Rc<RefCell<Config>>,
+    torrent_processor: Rc<TorrentProcessor>,
+    command_processor: Box<Rc<CommandProcessor>>,
+    irc_processor: Rc<RefCell<IrcProcessor>>,
 }
 
 impl Irc2Torrent {
@@ -46,19 +47,19 @@ impl Irc2Torrent {
                 TorrentPlatformsEnum::TorrentLeech(TorrentLeech::new(c.rss_key.clone(), c.torrent_dir.clone()))
             }
         };
-        let config = Rc::new(Mutex::new(cfg));
+        let config = Rc::new(RefCell::new(cfg));
         // let re: Regex = Regex::new(r".*Name:'(?P<name>.*)' uploaded by.*https://www.torrentleech.org/torrent/(?P<id>\d+)").unwrap();
-        let torrent_processor = Rc::new(Mutex::new(
-            TorrentProcessor::new(config.clone(), torrent_ch, vec![commands.clone().subscribe(), irc.clone().subscribe()], torrent_client, torrent_platform)));
-        let command_processor = Rc::new(Mutex::new(
-            CommandProcessor::new(config.clone(), torrent_processor.clone(), command_ch, vec![torrent.clone().subscribe(), irc.clone().subscribe()])));
-        let irc_processor = Rc::new(Mutex::new(
+        let torrent_processor = Rc::new(
+            TorrentProcessor::new(config.clone(), torrent_ch, vec![commands.clone().subscribe(), irc.clone().subscribe()], torrent_client, torrent_platform));
+        let command_processor = Rc::new(
+            CommandProcessor::new(config.clone(), torrent_processor.clone(), command_ch, vec![torrent.clone().subscribe(), irc.clone().subscribe()]));
+        let irc_processor = Rc::new(RefCell::new(
             IrcProcessor::new(config.clone(), torrent_processor.clone(), command_processor.clone(), irc_ch, vec![torrent.clone().subscribe(), commands.clone().subscribe()])));
-        Self { config, torrent_processor, command_processor: Box::new(command_processor), irc_processor: Box::new(irc_processor) }
+        Self { config, torrent_processor, command_processor: Box::new(command_processor), irc_processor: irc_processor }
     }
 
-    pub async fn start(&self) {
-        self.irc_processor.lock().unwrap().start_listening().await;
+    pub async fn start(&mut self) {
+        self.irc_processor.borrow_mut().start_listening().await;
     }
 
     async fn get_torrent_client(clients: &mut TorrentClientOption) -> TorrentClientsEnum {

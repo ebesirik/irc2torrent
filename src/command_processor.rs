@@ -1,5 +1,6 @@
 
 pub mod commands {
+    use std::cell::RefCell;
     use std::rc::Rc;
     // use std::borrow::Borrow;
     use std::sync::{Arc, Mutex};
@@ -16,14 +17,14 @@ pub mod commands {
     pub struct CommandProcessor {
         evt_channel: PubSub<String>,
         subs_cfg: Vec<Subscription<String>>,
-        config: Rc<Mutex<Config>>,
-        tp: Rc<Mutex<TorrentProcessor>>,
+        config: Rc<RefCell<Config>>,
+        tp: Rc<TorrentProcessor>,
         command_catching_regex: Regex,
         pwd_regex: Regex,
     }
 
     impl CommandProcessor {
-        pub fn new(cfg: Rc<Mutex<Config>>, torrent_processor: Rc<Mutex<TorrentProcessor>>, evt_channel: PubSub<String>, subs_cfg: Vec<Subscription<String>>) -> Self {
+        pub fn new(cfg: Rc<RefCell<Config>>, torrent_processor: Rc<TorrentProcessor>, evt_channel: PubSub<String>, subs_cfg: Vec<Subscription<String>>) -> Self {
             Self {
                 config: cfg,
                 command_catching_regex: Regex::new(r"cmd:(?P<command>\w+)(?: params:\((?P<params>.*)\))?").unwrap(),
@@ -35,8 +36,8 @@ pub mod commands {
         }
         
         pub fn authenticate(&self, user: &str, msg: &str) -> bool {
-            let uname = self.config.lock().unwrap().get_security_mode();
-            match self.config.lock().unwrap().get_security_mode() {
+            let uname = self.config.borrow().get_security_mode();
+            match self.config.borrow().get_security_mode() {
                 SecurityMode::IrcUserName(ref u) => {
                     if user == u {
                         return true;
@@ -114,7 +115,7 @@ pub mod commands {
 
         async fn remove_watch(&self, idx: usize) -> Result<String, String> {
             // let mut err_str = "Wrong argument format. Use: removewatch <torrent name> <torrent id>";
-            let r = &self.tp.clone().lock().unwrap().remove_torrent_from_watchlist(idx);
+            let r = &self.tp.remove_torrent_from_watchlist(idx).await;
             return match r {
                 Ok(std) => Ok(std.to_string()),
                 Err(error) => Err(error.to_string()),
@@ -125,14 +126,14 @@ pub mod commands {
 
         async fn add_torrent(&self, argument: &str) -> Result<String, String> {
             let err_str = "Wrong argument format. Use: addtorrent <torrent name> <torrent id>";
-            if let Some(caps) = self.config.lock().unwrap().get_announce_regex().captures(argument) {
-                return self.tp.lock().unwrap().add_torrent(&caps["name"], &caps["id"]).await;
+            if let Some(caps) = self.config.borrow().get_announce_regex().captures(argument) {
+                return self.tp.add_torrent(&caps["name"], &caps["id"]).await;
             }
             Err(err_str.to_string())
         }
 
         async fn add_torrent_to_watchlist(&self, argument: &str) -> Result<String, String> {
-            return self.tp.lock().unwrap().add_torrent_to_watchlist(argument.to_owned()).await;
+            return self.tp.add_torrent_to_watchlist(argument.to_owned()).await;
         }
     }
 }
