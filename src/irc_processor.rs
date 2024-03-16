@@ -38,9 +38,9 @@ pub mod irc {
 
         pub async fn start_listening(&mut self) {
             let mut retry_count = 0;
-            loop {
+            'connection: loop {
                 if let Some(mut ok_stream) = self.connect_irc().await {
-                    loop {
+                    'message: loop {
                         match ok_stream.next().await.transpose() {
                             Ok(Some(msg)) => {
                                 if let (Command::PRIVMSG(channel, inner_message), Some(nick)) = (&msg.command, &msg.source_nickname()) {
@@ -53,9 +53,19 @@ pub mod irc {
                                         info!("Torrent Id: {}", id);
                                         if self.tp.do_we_want_this_torrent(&name.to_string()) {
                                             if let Ok(b64) = self.tp.download_torrent(name.to_string(), id.to_string()).await {
-                                                self.tp.add_torrent_and_start(b64, name.to_string()).await;
+                                                info!("Torrent downloaded.");
+                                                match self.tp.add_torrent_and_start(b64, name.to_string()).await {
+                                                    Ok(_) => {
+                                                        info!("Torrent added to client.");
+                                                        let _ = self.send_privmsg(channel, "Torrent added to client.");
+                                                    }
+                                                    Err(e) => {
+                                                        error!("Could not add torrent to client. {:?}", e);
+                                                        let _ = self.send_privmsg(channel, format!("Could not add torrent to client. Error was: {:?}", e).as_str());
+                                                    }
+                                                }
                                             }
-                                            break;
+                                            //break 'message;
                                         }
                                     } else {
                                         if self.cp.is_command(inner_message) {
@@ -109,7 +119,7 @@ pub mod irc {
                     let _ = task::sleep(time::Duration::from_secs(3));
                     if retry_count >= IRC_MAX_RETRY {
                         error!("Could not reconnect to IRC server after {} retries. Exiting.", IRC_MAX_RETRY);
-                        break;
+                        break 'connection;
                     }
                 }
             }

@@ -62,11 +62,11 @@ pub mod torrent {
             Ok(list.to_owned())
         }
 
-        pub async fn add_torrent_and_start(&self, file: String, name: String) {
+        pub async fn add_torrent_and_start(&self, file: String, name: String) -> Result<(), Error> {
             match &self.torrent_client {
-                TorrentClientsEnum::Rtorrent(c) => { c.add_torrent_and_start(&file, name).await.expect("TODO: panic message")},
-                TorrentClientsEnum::Flood(c) => { c.add_torrent_and_start(&file, name).await.expect("TODO: panic message") }
-            };
+                TorrentClientsEnum::Rtorrent(c) => c.add_torrent_and_start(&file, name).await,
+                TorrentClientsEnum::Flood(c) => c.add_torrent_and_start(&file, name).await 
+            }
         }
 
         pub async fn download_torrent(&self, name: String, id: String) -> Result<String, Error> {
