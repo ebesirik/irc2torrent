@@ -61,7 +61,7 @@ pub mod irc {
                                                     }
                                                     Err(e) => {
                                                         error!("Could not add torrent to client. {:?}", e);
-                                                        let _ = self.send_privmsg(nick, `channel, format!("Could not add torrent to client. Error was: {:?}", e).as_str());
+                                                        let _ = self.send_privmsg(nick, channel, format!("Could not add torrent to client. Error was: {:?}", e).as_str());
                                                     }
                                                 }
                                             }
