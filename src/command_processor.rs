@@ -8,6 +8,7 @@ pub mod commands {
     use log::{error, info};
     use pub_sub::{PubSub, Subscription};
     use regex::Regex;
+    use crate::auth::Authorization;
 
     use crate::Config;
     use crate::config::config::SecurityMode;
@@ -20,39 +21,19 @@ pub mod commands {
         config: Rc<RefCell<Config>>,
         tp: Rc<TorrentProcessor>,
         command_catching_regex: Regex,
-        pwd_regex: Regex,
+        authorizer: Authorization,
     }
 
     impl CommandProcessor {
         pub fn new(cfg: Rc<RefCell<Config>>, torrent_processor: Rc<TorrentProcessor>, evt_channel: PubSub<String>, subs_cfg: Vec<Subscription<String>>) -> Self {
             Self {
-                config: cfg,
+                config: cfg.clone(),
                 command_catching_regex: Regex::new(r"cmd:(?P<command>\w+)(?: params:\((?P<params>.*)\))?").unwrap(),
-                pwd_regex: Regex::new(r"auth:\[(?P<password>.*)\]").unwrap(),
+                authorizer: Authorization::new(cfg.clone()),
                 tp: torrent_processor,
                 evt_channel,
                 subs_cfg,
             }
-        }
-        
-        pub fn authenticate(&self, user: &str, msg: &str) -> bool {
-            let uname = self.config.borrow().get_security_mode();
-            match self.config.borrow().get_security_mode() {
-                SecurityMode::IrcUserName(ref u) => {
-                    if user == u {
-                        return true;
-                    }
-                }
-                SecurityMode::Password(ref p) => {
-                    if let Some(caps) = self.pwd_regex.captures(msg) {
-                        let password = &caps["password"];
-                        if password == p {
-                            return true;
-                        }
-                    }
-                }
-            }
-            false
         }
         
         pub fn is_command(&self, msg: &str) -> bool {

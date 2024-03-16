@@ -1,6 +1,7 @@
 pub mod irc {
     use std::any::Any;
     use std::cell::RefCell;
+    use std::collections::HashMap;
     use std::rc::Rc;
     use std::sync::{Arc, Mutex};
     use std::time;
@@ -14,6 +15,10 @@ pub mod irc {
     use log::{error, info};
     use pub_sub::{PubSub, Subscription};
     use regex::Regex;
+    use crate::auth;
+    use crate::auth::Authorization;
+    use crate::auth::AuthResult::*;
+    use crate::auth::MessageTypes::{Announcement};
 
     use crate::command_processor::commands::CommandProcessor;
     use crate::config::config::SecurityMode;
@@ -29,11 +34,21 @@ pub mod irc {
         tp: Rc<TorrentProcessor>,
         cp: Rc<CommandProcessor>,
         client: Rc<RefCell<Option<Client>>>,
+        status_response_regex: Regex,
+        auth: Authorization,
+        user_status: HashMap<String, UserStatus>,
+    }
+    
+    #[derive(Debug)]
+    pub struct UserStatus {
+        nick: String,
+        status: u8,
+        time_of_check: u64,
     }
 
     impl IrcProcessor {
         pub fn new(cfg: Rc<RefCell<crate::config::config::Config>>, torrent_processor: Rc<TorrentProcessor>, command_processor: Rc<CommandProcessor>, evt_channel: PubSub<String>, subs_cfg: Vec<Subscription<String>>) -> Self {
-            Self { config: cfg, tp: torrent_processor, cp: command_processor, evt_channel, subs_cfg, client: Rc::new(RefCell::new(None)) }
+            Self { config: cfg.clone(), tp: torrent_processor, cp: command_processor, evt_channel, subs_cfg, client: Rc::new(RefCell::new(None)), status_response_regex: Regex::new(r"STATUS (?P<nick>\w+) (?P<status>\d{1})").unwrap(), auth: Authorization::new(cfg.clone()), user_status: HashMap::new() }
         }
 
         pub async fn start_listening(&mut self) {
@@ -43,57 +58,7 @@ pub mod irc {
                     'message: loop {
                         match ok_stream.next().await.transpose() {
                             Ok(Some(msg)) => {
-                                if let (Command::PRIVMSG(channel, inner_message), Some(nick)) = (&msg.command, &msg.source_nickname()) {
-                                    info!("{}@{}: {}", nick, channel, inner_message);
-                                    println!("{}@{}: {}", nick, channel, inner_message);
-                                    let re = self.config.borrow().get_announce_regex().clone();
-                                    if let Some(caps) = re.captures(inner_message) {
-                                        let (name, id) = (&caps["name"], &caps["id"]);
-                                        info!("Torrent name: {}", name);
-                                        info!("Torrent Id: {}", id);
-                                        if self.tp.do_we_want_this_torrent(&name.to_string()) {
-                                            if let Ok(b64) = self.tp.download_torrent(name.to_string(), id.to_string()).await {
-                                                info!("Torrent downloaded.");
-                                                match self.tp.add_torrent_and_start(b64, name.to_string()).await {
-                                                    Ok(_) => {
-                                                        info!("Torrent added to client.");
-                                                        let _ = self.send_privmsg(nick, channel, "Torrent added to client.");
-                                                    }
-                                                    Err(e) => {
-                                                        error!("Could not add torrent to client. {:?}", e);
-                                                        let _ = self.send_privmsg(nick, channel, format!("Could not add torrent to client. Error was: {:?}", e).as_str());
-                                                    }
-                                                }
-                                            }
-                                            //break 'message;
-                                        }
-                                    } else {
-                                        if self.cp.is_command(inner_message) {
-                                            info!("Message is a command. ({nick}: {inner_message})");
-                                            if self.config.borrow().is_commands_enabled() {
-                                                info!("Commands are enabled.");
-                                                if self.cp.authenticate(nick, &inner_message) {
-                                                    info!("User is authenticated.");
-                                                    if let Ok(result) = self.cp.process_command(inner_message.to_string()).await {
-                                                        info!("Command result: {}", result);
-                                                        let _ = self.send_privmsg(nick, channel, result.as_str());
-                                                    } else {
-                                                        error!("Command failed.");
-                                                        let _ = self.send_privmsg(nick, channel, "Command not found.");
-                                                    }
-                                                } else {
-                                                    error!("User is not authenticated.");
-                                                    let _ = self.send_privmsg(nick, channel, "You are not authorized to use this bot.");
-                                                }
-                                            } else {
-                                                error!("Commands are disabled.");
-                                                let _ = self.send_privmsg(nick, channel, "Commands are disabled.");
-                                            }
-                                        } else {
-                                            info!("Message is not a torrent or a command. ({nick}: {inner_message})");
-                                        }
-                                    }
-                                }
+                                self.msg_process(&msg).await;
                             }
                             Err(e) => {
                                 if e.type_id() == Error::PingTimeout.type_id() {
@@ -125,12 +90,86 @@ pub mod irc {
             }
         }
 
-        fn send_privmsg(&self, nick: &str, channel: &str, message: &str) {
-            let channels = self.config.borrow().get_irc_config().channels.clone();
-            if !channels.contains(&channel.to_string()) && !nick.is_empty() {
-                if let Some(c) = self.client.borrow_mut().as_mut() {
-                    let _ = c.send_privmsg(nick, message);
+        async fn msg_process(&mut self, msg: &Message) {
+            if let (Command::PRIVMSG(channel, inner_message), Some(nick)) = (&msg.command, &msg.source_nickname()) {
+                info!("{}@{}: {}", nick, channel, inner_message);
+                let re = self.config.borrow().get_announce_regex().clone();
+                if let Some(caps) = re.captures(inner_message) {
+                    let (name, id) = (&caps["name"], &caps["id"]);
+                    self.torrent_msg_process(channel, nick, &name, &id).await;
+                } else {
+                    if self.cp.is_command(inner_message) {
+                        self.command_msg_process(channel, inner_message, nick).await;
+                    } else if channel.eq("NickServ") {
+                        info!("Message is from NickServ.");
+                        if inner_message.contains("STATUS") {
+                            info!("Message is a STATUS response.");
+                            let (nick, status) = self.status_response_regex.captures(inner_message).map(|caps| (caps["nick"].to_string(), caps["status"].parse().unwrap())).unwrap();
+                            self.user_status_report(nick.as_str(), status);
+                        }
+                    } else {
+                        info!("Message is not a torrent or a command. ({nick}: {inner_message})");
+                    }
                 }
+            }
+        }
+
+        async fn command_msg_process(&mut self, channel: &String, inner_message: &String, nick: &&str) {
+            info!("Message is a command. ({nick}: {inner_message})");
+            match self.auth.authenticate(nick, channel, inner_message, crate::auth::MessageTypes::Command) {
+                NotAuthorized => {
+                    error!("User is not authorized to use this bot.");
+                    let _ = self.send_privmsg(channel, "You are not authorized to use this bot.");
+                }
+                _ => {
+                    if let Ok(result) = self.cp.process_command(inner_message.to_string()).await {
+                        info!("Command result: {}", result);
+                        let _ = self.send_privmsg(channel, result.as_str());
+                    } else {
+                        error!("Command failed.");
+                        let _ = self.send_privmsg(channel, "Command not found.");
+                    }
+                }
+            }
+        }
+
+        async fn torrent_msg_process(&mut self, channel: &String, nick: &&str, name: &&str, id: &&str) {
+            let inner_message: &String;
+
+            info!("Torrent name: {}", name);
+            info!("Torrent Id: {}", id);
+            if let SourceValidated = self.auth.authenticate(nick, channel, "", Announcement) {
+                info!("User is authenticated.");
+                if self.tp.process_torrent(&name.to_string(), &id.to_string()).await {
+                    let _ = self.send_privmsg(channel, "Torrent added to client.");
+                } else {
+                    let _ = self.send_privmsg(channel, "Could not add torrent to client.");
+                }
+            }
+        }
+
+        pub fn user_status_report(&mut self, nick: &str, status: u8) {
+            let time = chrono::Utc::now().timestamp();
+            let user = UserStatus { nick: nick.to_string(), status, time_of_check: time as u64 };
+            info!("User status report: {user:?}");
+            self.user_status.insert(nick.to_string(), user);
+        }
+        
+        pub fn update_user_status(&self, nick: &str) {
+            if let Some(c) = self.client.borrow_mut().as_mut() {
+                let _ = c.send_privmsg("NickServ", format!("STATUS {}", nick));
+            }
+        }
+        
+        pub fn send_log(&self, message: &str) {
+            if let Some(c) = self.client.borrow_mut().as_mut() {
+                let _ = c.send_privmsg("NickServ", message);
+            }
+        }
+
+        fn send_privmsg(&self, channel: &str, message: &str) {
+            if let Some(c) = self.client.borrow_mut().as_mut() {
+                let _ = c.send_privmsg(channel, message);
             }
         }
 
@@ -165,7 +204,6 @@ pub mod irc {
 
 #[cfg(test)]
 pub mod test {
-
     #[tokio::test]
     pub async fn test_regex() {
         let re: regex::Regex = regex::Regex::new(r".*Name:'(?P<name>.*)' uploaded by.*https://www.torrentleech.org/torrent/(?P<id>\d+)").unwrap();

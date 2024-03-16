@@ -6,6 +6,7 @@ pub mod torrent {
     use anyhow::Error;
     use base64;
     use base64::Engine as _;
+    use log::{error, info};
     use pub_sub::{PubSub, Subscription};
     use regex::Regex;
 
@@ -42,6 +43,26 @@ pub mod torrent {
                 options: config,
                 // dl_regexes: dl_regex,
             }
+        }
+        
+        pub async fn process_torrent(&self, name: &String, id: &String) -> bool {
+            if self.do_we_want_this_torrent(&name.to_string()) {
+                if let Ok(b64) = self.download_torrent(name.to_string(), id.to_string()).await {
+                    info!("Torrent downloaded.");
+                    match self.add_torrent_and_start(b64, name.to_string()).await {
+                        Ok(_) => {
+                            info!("Torrent added to client.");
+                            // let _ = self.send_privmsg(nick, channel, "Torrent added to client.");
+                            return true;
+                        }
+                        Err(e) => {
+                            error!("Could not add torrent to client. {:?}", e);
+                            // let _ = self.send_privmsg(nick, channel, format!("Could not add torrent to client. Error was: {:?}", e).as_str());
+                        }
+                    }
+                }
+            }
+            return false;
         }
 
         pub fn do_we_want_this_torrent(&self, name: &String) -> bool {

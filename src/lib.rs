@@ -6,11 +6,13 @@ use crate::clients::{TorrentClientsEnum};
 use crate::clients::flood::Flood;
 use crate::clients::rtorrent::rTorrent;
 use crate::command_processor::commands::CommandProcessor;
-use crate::config::config::{Config, TorrentClientOption, TorrentPlatforms};
+use crate::config::config::{Config, SecurityMode, TorrentClientOption, TorrentPlatforms};
 use crate::irc_processor::irc::IrcProcessor;
 use crate::platforms::{TorrentPlatform, TorrentPlatformsEnum};
 use crate::platforms::tl::TorrentLeech;
 use crate::torrent_processor::torrent::TorrentProcessor;
+use tokio::select;
+use tokio::time::{Duration, Instant, interval_at};
 
 mod irc_processor;
 mod command_processor;
@@ -18,10 +20,20 @@ mod torrent_processor;
 mod config;
 mod clients;
 mod platforms;
+mod auth;
 
 static IRC_CONFIG_FILE: &str = "irc.toml";
 static OPTIONS_CONFIG_FILE: &str = "options.toml";
+const PERIODIC_CHECK_INTERVAL: u64 = 60;
 
+async fn periodic_check(irc: Rc<RefCell<IrcProcessor>>, nick: &str) {
+    let start_time = Instant::now();
+    let mut interval = interval_at(start_time, Duration::from_secs(PERIODIC_CHECK_INTERVAL));
+    loop {
+        irc.borrow().update_user_status(nick);
+        interval.tick().await;
+    }
+}
 
 pub struct Irc2Torrent {
     config: Rc<RefCell<Config>>,
@@ -55,6 +67,11 @@ impl Irc2Torrent {
             CommandProcessor::new(config.clone(), torrent_processor.clone(), command_ch, vec![torrent.clone().subscribe(), irc.clone().subscribe()]));
         let irc_processor = Rc::new(RefCell::new(
             IrcProcessor::new(config.clone(), torrent_processor.clone(), command_processor.clone(), irc_ch, vec![torrent.clone().subscribe(), commands.clone().subscribe()])));
+        if let SecurityMode::IrcUserName(nick) = config.borrow().get_security_mode() {
+            select! {
+                _ = periodic_check(irc_processor.clone(), &nick) => {}
+            }
+        }
         Self { config, torrent_processor, command_processor: Box::new(command_processor), irc_processor: irc_processor }
     }
 

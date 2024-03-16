@@ -19,17 +19,19 @@ async fn main() -> Result<(), failure::Error> {
         process: "irc2torrent".into(),
         pid: process::id(),
     };
-    if let Ok(logger) = syslog::unix(formatter) {
+    /*if let Ok(logger) = syslog::unix(formatter) {
         let _ = log::set_boxed_logger(Box::new(BasicLogger::new(logger)))
             .map(|()| log::set_max_level(LevelFilter::Info));
-    } else {
+    } else {*/
         CombinedLogger::init(vec![
-            #[cfg(feature = "termcolor")]
+            #[cfg(all(feature = "termcolor", not(debug_assertions)))]
                 TermLogger::new(LevelFilter::Info, Config::default(), TerminalMode::Mixed, ColorChoice::Auto),
-            #[cfg(not(feature = "termcolor"))]
+            #[cfg(all(not(feature = "termcolor"), not(debug_assertions)))]
                 SimpleLogger::new(LevelFilter::Info, Config::default()),
+            #[cfg(debug_assertions)]
+                TestLogger::new(LevelFilter::Info, Default::default()),
         ]).unwrap();
-    }
+    // }
     info!("Started the app");
     let mut app = irc2torrent::Irc2Torrent::new().await;
     app.start().await;
