@@ -69,7 +69,7 @@ impl rTorrent {
     }
 
     pub(crate) async fn add_torrent_and_start(&self, file: &str, name: String) -> Result<(), Error> {
-        if let Ok(bytes) = &general_purpose::STANDARD_NO_PAD.decode(file.as_bytes()) {
+        if let Ok(bytes) = &general_purpose::STANDARD.decode(file.as_bytes()) {
             let request = Call::new("load.raw_start_verbose", ("", bytes.as_slice()));
             // let request = dxr::client::Call::new("load.raw_start_verbose", file);
             let result: Result<i32, ClientError> = self.client.call(request).await;
