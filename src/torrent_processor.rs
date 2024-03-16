@@ -1,4 +1,5 @@
 pub mod torrent {
+    use std::rc::Rc;
     use std::sync::{Arc, Mutex};
 
     use anyhow::Error;
@@ -17,13 +18,13 @@ pub mod torrent {
         subs_cfg: Vec<Subscription<String>>,
         torrent_client: TorrentClientsEnum,
         torrent_platform: TorrentPlatformsEnum,
-        options: Arc<Mutex<Config>>,
+        options: Rc<Mutex<Config>>,
     }
 
     impl TorrentProcessor
     {
         pub fn new(
-            config: Arc<Mutex<Config>>,
+            config: Rc<Mutex<Config>>,
             evt_channel: PubSub<String>,
             subs_cfg: Vec<Subscription<String>>,
             torrent_client: TorrentClientsEnum,

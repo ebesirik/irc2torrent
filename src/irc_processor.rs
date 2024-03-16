@@ -1,5 +1,6 @@
 pub mod irc {
     use std::any::Any;
+    use std::rc::Rc;
     use std::sync::{Arc, Mutex};
     use std::time;
 
@@ -23,15 +24,15 @@ pub mod irc {
     pub struct IrcProcessor {
         evt_channel: PubSub<String>,
         subs_cfg: Vec<Subscription<String>>,
-        config: Arc<Mutex<crate::config::config::Config>>,
-        tp: Arc<Mutex<TorrentProcessor>>,
-        cp: Arc<Mutex<CommandProcessor>>,
-        client: Arc<Mutex<Option<Client>>>,
+        config: Rc<Mutex<crate::config::config::Config>>,
+        tp: Rc<Mutex<TorrentProcessor>>,
+        cp: Rc<Mutex<CommandProcessor>>,
+        client: Rc<Mutex<Option<Client>>>,
     }
 
     impl IrcProcessor {
-        pub fn new(cfg: Arc<Mutex<crate::config::config::Config>>, torrent_processor: Arc<Mutex<TorrentProcessor>>, command_processor: Arc<Mutex<CommandProcessor>>, evt_channel: PubSub<String>, subs_cfg: Vec<Subscription<String>>) -> Self {
-            Self { config: cfg, tp: torrent_processor, cp: command_processor, evt_channel, subs_cfg, client: Arc::new(Mutex::new(None)) }
+        pub fn new(cfg: Rc<Mutex<crate::config::config::Config>>, torrent_processor: Rc<Mutex<TorrentProcessor>>, command_processor: Rc<Mutex<CommandProcessor>>, evt_channel: PubSub<String>, subs_cfg: Vec<Subscription<String>>) -> Self {
+            Self { config: cfg, tp: torrent_processor, cp: command_processor, evt_channel, subs_cfg, client: Rc::new(Mutex::new(None)) }
         }
 
         pub async fn start_listening(&mut self) {
@@ -116,7 +117,7 @@ pub mod irc {
                 Ok(mut c) => {
                     if let Ok(_) = c.identify() {
                         if let Ok(cs) = c.stream() {
-                            self.client = Arc::new(Mutex::new(Some(c)));
+                            self.client = Rc::new(Mutex::new(Some(c)));
                             info!("Connected to IRC server.");
                             Some(cs)
                         } else {

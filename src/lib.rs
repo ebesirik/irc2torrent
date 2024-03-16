@@ -1,3 +1,4 @@
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use crate::clients::{TorrentClientsEnum};
@@ -22,10 +23,10 @@ static OPTIONS_CONFIG_FILE: &str = "options.toml";
 
 
 pub struct Irc2Torrent {
-    config: Arc<Mutex<Config>>,
-    torrent_processor: Arc<Mutex<TorrentProcessor>>,
-    command_processor: Box<Arc<Mutex<CommandProcessor>>>,
-    irc_processor: Box<Arc<Mutex<IrcProcessor>>>,
+    config: Rc<Mutex<Config>>,
+    torrent_processor: Rc<Mutex<TorrentProcessor>>,
+    command_processor: Box<Rc<Mutex<CommandProcessor>>>,
+    irc_processor: Box<Rc<Mutex<IrcProcessor>>>,
 }
 
 impl Irc2Torrent {
@@ -45,13 +46,13 @@ impl Irc2Torrent {
                 TorrentPlatformsEnum::TorrentLeech(TorrentLeech::new(c.rss_key.clone(), c.torrent_dir.clone()))
             }
         };
-        let config = Arc::new(Mutex::new(cfg));
+        let config = Rc::new(Mutex::new(cfg));
         // let re: Regex = Regex::new(r".*Name:'(?P<name>.*)' uploaded by.*https://www.torrentleech.org/torrent/(?P<id>\d+)").unwrap();
-        let torrent_processor = Arc::new(Mutex::new(
+        let torrent_processor = Rc::new(Mutex::new(
             TorrentProcessor::new(config.clone(), torrent_ch, vec![commands.clone().subscribe(), irc.clone().subscribe()], torrent_client, torrent_platform)));
-        let command_processor = Arc::new(Mutex::new(
+        let command_processor = Rc::new(Mutex::new(
             CommandProcessor::new(config.clone(), torrent_processor.clone(), command_ch, vec![torrent.clone().subscribe(), irc.clone().subscribe()])));
-        let irc_processor = Arc::new(Mutex::new(
+        let irc_processor = Rc::new(Mutex::new(
             IrcProcessor::new(config.clone(), torrent_processor.clone(), command_processor.clone(), irc_ch, vec![torrent.clone().subscribe(), commands.clone().subscribe()])));
         Self { config, torrent_processor, command_processor: Box::new(command_processor), irc_processor: Box::new(irc_processor) }
     }

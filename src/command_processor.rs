@@ -1,5 +1,6 @@
 
 pub mod commands {
+    use std::rc::Rc;
     // use std::borrow::Borrow;
     use std::sync::{Arc, Mutex};
 
@@ -15,14 +16,14 @@ pub mod commands {
     pub struct CommandProcessor {
         evt_channel: PubSub<String>,
         subs_cfg: Vec<Subscription<String>>,
-        config: Arc<Mutex<Config>>,
-        tp: Arc<Mutex<TorrentProcessor>>,
+        config: Rc<Mutex<Config>>,
+        tp: Rc<Mutex<TorrentProcessor>>,
         command_catching_regex: Regex,
         pwd_regex: Regex,
     }
 
     impl CommandProcessor {
-        pub fn new(cfg: Arc<Mutex<Config>>, torrent_processor: Arc<Mutex<TorrentProcessor>>, evt_channel: PubSub<String>, subs_cfg: Vec<Subscription<String>>) -> Self {
+        pub fn new(cfg: Rc<Mutex<Config>>, torrent_processor: Rc<Mutex<TorrentProcessor>>, evt_channel: PubSub<String>, subs_cfg: Vec<Subscription<String>>) -> Self {
             Self {
                 config: cfg,
                 command_catching_regex: Regex::new(r"cmd:(?P<command>\w+)(?: params:\((?P<params>.*)\))?").unwrap(),
