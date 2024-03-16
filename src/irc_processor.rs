@@ -19,7 +19,7 @@ pub mod irc {
     use crate::config::config::SecurityMode;
     use crate::platforms::TorrentPlatform;
     use crate::torrent_processor::torrent::TorrentProcessor;
-    
+
     const IRC_MAX_RETRY: u8 = 10;
 
     pub struct IrcProcessor {
@@ -61,7 +61,7 @@ pub mod irc {
                                                     }
                                                     Err(e) => {
                                                         error!("Could not add torrent to client. {:?}", e);
-                                                        let _ = self.send_privmsg(nick, channel, format!("Could not add torrent to client. Error was: {:?}", e).as_str());
+                                                        let _ = self.send_privmsg(nick, `channel, format!("Could not add torrent to client. Error was: {:?}", e).as_str());
                                                     }
                                                 }
                                             }
@@ -124,7 +124,7 @@ pub mod irc {
                 }
             }
         }
-        
+
         fn send_privmsg(&self, nick: &str, channel: &str, message: &str) {
             let channels = self.config.borrow().get_irc_config().channels.clone();
             if !channels.contains(&channel.to_string()) && !nick.is_empty() {
@@ -165,7 +165,7 @@ pub mod irc {
 
 #[cfg(test)]
 pub mod test {
-    
+
     #[tokio::test]
     pub async fn test_regex() {
         let re: regex::Regex = regex::Regex::new(r".*Name:'(?P<name>.*)' uploaded by.*https://www.torrentleech.org/torrent/(?P<id>\d+)").unwrap();
