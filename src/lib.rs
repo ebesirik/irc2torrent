@@ -67,11 +67,11 @@ impl Irc2Torrent {
             CommandProcessor::new(config.clone(), torrent_processor.clone(), command_ch, vec![torrent.clone().subscribe(), irc.clone().subscribe()]));
         let irc_processor = Rc::new(RefCell::new(
             IrcProcessor::new(config.clone(), torrent_processor.clone(), command_processor.clone(), irc_ch, vec![torrent.clone().subscribe(), commands.clone().subscribe()])));
-        if let SecurityMode::IrcUserName(nick) = config.borrow().get_security_mode() {
+        /*if let SecurityMode::IrcUserName(nick) = config.borrow().get_security_mode() {
             select! {
                 _ = periodic_check(irc_processor.clone(), &nick) => {}
             }
-        }
+        }*/
         Self { config, torrent_processor, command_processor: Box::new(command_processor), irc_processor: irc_processor }
     }
 
