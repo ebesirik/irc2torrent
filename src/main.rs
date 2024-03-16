@@ -31,8 +31,8 @@ async fn main() -> Result<(), failure::Error> {
         ]).unwrap();
     }
     info!("Started the app");
-    let app = irc2torrent::Irc2Torrent::new();
-    app.await.start().await;
+    let mut app = irc2torrent::Irc2Torrent::new().await;
+    app.start().await;
 
     Ok(())
 }
