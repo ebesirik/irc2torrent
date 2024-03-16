@@ -72,19 +72,19 @@ impl Irc2Torrent {
             if retry_count > 1 {
                 tokio::time::sleep(std::time::Duration::from_secs(3)).await;
             }
-            match clients {
+            return match clients {
                 TorrentClientOption::rTorrent(ref mut c) => {
-                    return TorrentClientsEnum::Rtorrent(rTorrent::new(c.xmlrpc_url.clone()).await.unwrap_or(continue));
+                    TorrentClientsEnum::Rtorrent(rTorrent::new(c.xmlrpc_url.clone()).await.unwrap_or(continue))
                 }
                 TorrentClientOption::Flood(ref mut c) => {
-                    return TorrentClientsEnum::Flood(Flood::new(
+                    TorrentClientsEnum::Flood(Flood::new(
                         c.username.clone(),
                         c.password.clone(),
                         c.url.clone(),
                         c.destination.clone(),
                     )
                         .await
-                        .unwrap_or(continue));
+                        .unwrap_or(continue))
                 }
             };
         }
