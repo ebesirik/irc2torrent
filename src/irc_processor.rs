@@ -76,18 +76,18 @@ pub mod irc {
                                                     info!("User is authenticated.");
                                                     if let Ok(result) = self.cp.process_command(inner_message.to_string()).await {
                                                         info!("Command result: {}", result);
-                                                        let _ = self.send_privmsg(channel, result.as_str());
+                                                        let _ = self.send_privmsg(nick, channel, result.as_str());
                                                     } else {
                                                         error!("Command failed.");
-                                                        let _ = self.send_privmsg(channel, "Command not found.");
+                                                        let _ = self.send_privmsg(nick, channel, "Command not found.");
                                                     }
                                                 } else {
                                                     error!("User is not authenticated.");
-                                                    let _ = self.send_privmsg(channel, "You are not authorized to use this bot.");
+                                                    let _ = self.send_privmsg(nick, channel, "You are not authorized to use this bot.");
                                                 }
                                             } else {
                                                 error!("Commands are disabled.");
-                                                let _ = self.send_privmsg(channel, "Commands are disabled.");
+                                                let _ = self.send_privmsg(nick, channel, "Commands are disabled.");
                                             }
                                         } else {
                                             info!("Message is not a torrent or a command. ({nick}: {inner_message})");
@@ -125,9 +125,12 @@ pub mod irc {
             }
         }
         
-        fn send_privmsg(&self, channel: &str, message: &str) {
-            if let Some(c) = self.client.borrow_mut().as_mut() {
-                let _ = c.send_privmsg(channel, message);
+        fn send_privmsg(&self, nick: &str, channel: &str, message: &str) {
+            let channels = self.config.borrow().get_irc_config().channels.clone();
+            if !channels.contains(&channel.to_string()) && !nick.is_empty() {
+                if let Some(c) = self.client.borrow_mut().as_mut() {
+                    let _ = c.send_privmsg(nick, message);
+                }
             }
         }
 
