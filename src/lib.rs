@@ -29,7 +29,7 @@ pub struct Irc2Torrent {
     command_processor: Box<Rc<CommandProcessor>>,
     irc_processor: Rc<RefCell<IrcProcessor>>,
 }
-
+const CLIENT_MAX_RETRY: u8 = 10;
 impl Irc2Torrent {
     pub async fn new() -> Self {
         let torrent = pub_sub::PubSub::new();
@@ -63,20 +63,30 @@ impl Irc2Torrent {
     }
 
     async fn get_torrent_client(clients: &mut TorrentClientOption) -> TorrentClientsEnum {
-        match clients {
-            TorrentClientOption::rTorrent(ref mut c) => {
-                return TorrentClientsEnum::Rtorrent(rTorrent::new(c.xmlrpc_url.clone()).await.unwrap());
+        let mut retry_count: u8 = 0;
+        loop {
+            if retry_count >= CLIENT_MAX_RETRY {
+                panic!("Failed to connect to torrent client after {} retries", retry_count);
             }
-            TorrentClientOption::Flood(ref mut c) => {
-                return TorrentClientsEnum::Flood(Flood::new(
-                    c.username.clone(),
-                    c.password.clone(),
-                    c.url.clone(),
-                    c.destination.clone(),
-                )
-                    .await
-                    .unwrap());
+            retry_count += 1;
+            if retry_count > 1 {
+                tokio::time::sleep(std::time::Duration::from_secs(3)).await;
             }
-        };
+            match clients {
+                TorrentClientOption::rTorrent(ref mut c) => {
+                    return TorrentClientsEnum::Rtorrent(rTorrent::new(c.xmlrpc_url.clone()).await.unwrap_or(continue));
+                }
+                TorrentClientOption::Flood(ref mut c) => {
+                    return TorrentClientsEnum::Flood(Flood::new(
+                        c.username.clone(),
+                        c.password.clone(),
+                        c.url.clone(),
+                        c.destination.clone(),
+                    )
+                        .await
+                        .unwrap_or(continue));
+                }
+            };
+        }
     }
 }
