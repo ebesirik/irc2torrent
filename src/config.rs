@@ -239,7 +239,7 @@ pub mod config {
                 .option_data
                 .lock()
                 .unwrap()
-                .regex_for_reject_match
+                .regex_for_downloads_reject_match
                 .iter()
                 .filter_map(|regex| Regex::new(regex.as_str()).ok())
                 .collect();
