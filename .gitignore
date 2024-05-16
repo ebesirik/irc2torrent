@@ -4,3 +4,4 @@
 *.iml
 Cargo.lock
 *.sh
+**.DS_Store
