@@ -71,6 +71,7 @@ pub mod torrent {
             let torrent_match_reject_regex_list = self.options.borrow().get_reject_regexes();
             for regex in &torrent_match_reject_regex_list {
                 if regex.is_match(name) {
+                    info!("Torrent {} rejected by reject list", name);
                     return false;
                 }
             }
