@@ -5,6 +5,7 @@ pub mod config {
     use anyhow::Error;
     use directories::BaseDirs;
     use log::{debug, error, info};
+    use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
     use regex::Regex;
     use serde::{de, ser};
     use serde_derive::{Deserialize, Serialize};
@@ -15,6 +16,7 @@ pub mod config {
     pub struct Config {
         option_data: Mutex<OptionData>,
         irc_data: irc::client::data::config::Config,
+        watcher: notify::Result<RecommendedWatcher>,
     }
 
     impl Default for Config {
@@ -22,6 +24,7 @@ pub mod config {
             Self {
                 option_data: Mutex::new(OptionData::default()),
                 irc_data: Config::get_irc_default_config(),
+                watcher: notify::recommended_watcher(Self::event_fn),
             }
         }
     }
@@ -45,7 +48,7 @@ pub mod config {
                 command_options: CommandOptions::default(),
                 regex_for_downloads_match: vec!["Some Regex to match.*1080p.*".to_string(), "Another Release.*S02.*1080p.*WEB.*".to_string()],
                 regex_for_downloads_reject_match: vec![".*NORDIC.*".to_string(), ".*GERMAN.*".to_string()],
-                regex_for_announce_match: r".*Name:'(?P<name>.*)' uploaded by.*https://www.torrentleech.org/torrent/(?P<id>\d+)".to_string()
+                regex_for_announce_match: r".*Name:'(?P<name>.*)' uploaded by.*https://www.torrentleech.org/torrent/(?P<id>\d+)".to_string(),
             }
         }
     }
@@ -136,20 +139,31 @@ pub mod config {
                     OPTIONS_CONFIG_FILE.to_string(),
                     Some(&OptionData::default()),
                 )
-                .await,
+                    .await,
                 Config::read_or_create_toml::<irc::client::data::config::Config>(
                     IRC_CONFIG_FILE.to_string(),
                     Some(&Self::get_irc_default_config()),
                 )
-                .await,
+                    .await,
             ) {
+                let mut w = notify::recommended_watcher(Self::event_fn)?;
+                w.watch(&Config::get_full_config_path(OPTIONS_CONFIG_FILE.to_string()).unwrap(), RecursiveMode::Recursive)?;
                 Ok(Self {
                     option_data: Mutex::new(option_config),
-                    irc_data: irc_config, /*, subscribers: Mutex::new(HashSet::new())*/
+                    irc_data: irc_config,
+                    watcher: Ok(w),
+                    /*, subscribers: Mutex::new(HashSet::new())*/
                 })
             } else {
                 Err(Error::msg("Could not read or create options file"))
             };
+        }
+
+        pub fn event_fn(res: notify::Result<Event>) {
+            match res {
+                Ok(event) => info!("event: {:?}", event),
+                Err(e) => error!("watch error: {:?}", e),
+            }
         }
 
         fn get_irc_default_config() -> irc::client::data::config::Config {
@@ -220,7 +234,7 @@ pub mod config {
                     .as_str()
                     .clone(),
             )
-            .unwrap();
+                .unwrap();
         }
 
         pub fn get_dl_regexes(&self) -> Vec<Regex> {
@@ -272,9 +286,9 @@ pub mod config {
         }
 
         async fn read_or_create_toml<T>(filename: String, data: Option<&T>) -> Option<T>
-        where
-            T: ser::Serialize,
-            T: de::DeserializeOwned,
+            where
+                T: ser::Serialize,
+                T: de::DeserializeOwned,
         {
             if let Some(full_path_buf) = Config::get_full_config_path(filename.clone()) {
                 info!(
@@ -312,9 +326,9 @@ pub mod config {
         }
 
         async fn read_file_to_toml<T>(path: &Path) -> Option<T>
-        where
-            T: ser::Serialize,
-            T: de::DeserializeOwned,
+            where
+                T: ser::Serialize,
+                T: de::DeserializeOwned,
         {
             let contents: String = match fs::read_to_string(path).await {
                 Ok(c) => c,
@@ -346,8 +360,8 @@ pub mod config {
             filename: String,
             config: T,
         ) -> Result<bool, String>
-        where
-            T: ser::Serialize,
+            where
+                T: ser::Serialize,
         {
             if let Ok(toml) = toml::to_string(&config) {
                 if let Some(path) = Config::get_full_config_path(filename) {
