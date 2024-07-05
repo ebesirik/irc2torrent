@@ -1,8 +1,8 @@
 pub mod config {
     use std::path::{Path, PathBuf};
     use std::sync::{Arc, Mutex};
-    use std::thread::JoinHandle;
-
+    use std::thread::{JoinHandle, sleep};
+    use std::time::Duration;
     use anyhow::Error;
     use directories::BaseDirs;
     use log::{debug, error, info};
@@ -164,9 +164,20 @@ pub mod config {
                 let thread_watcher = Arc::clone(&watcher);
                 let handle: JoinHandle<()> = std::thread::spawn(move || {
                     loop {
-                        let mut locked_watcher = thread_watcher.lock().unwrap();
-                        // Process the events
-                        locked_watcher.watch(&full_config_path, recursive_mode).unwrap();
+                        match thread_watcher.lock() {
+                            Ok(mut guard) => {
+                                if !full_config_path.exists() {
+                                    println!("File does not exist, skipping this iteration");
+                                    sleep(Duration::from_secs(1));
+                                    continue;
+                                }
+                                match guard.watch(&full_config_path, recursive_mode) {
+                                    Ok(_) => println!("File watched successfully"),
+                                    Err(e) => println!("Error watching file: {:?}", e),
+                                }
+                            }
+                            Err(e) => println!("Error locking the watcher: {:?}", e),
+                        }
                     }
                 });
                 Ok(Self {
@@ -308,9 +319,9 @@ pub mod config {
         }
 
         async fn read_or_create_toml<T>(filename: String, data: Option<&T>) -> Option<T>
-            where
-                T: ser::Serialize,
-                T: de::DeserializeOwned,
+        where
+            T: ser::Serialize,
+            T: de::DeserializeOwned,
         {
             if let Some(full_path_buf) = Config::get_full_config_path(filename.clone()) {
                 info!(
@@ -348,9 +359,9 @@ pub mod config {
         }
 
         async fn read_file_to_toml<T>(path: &Path) -> Option<T>
-            where
-                T: ser::Serialize,
-                T: de::DeserializeOwned,
+        where
+            T: ser::Serialize,
+            T: de::DeserializeOwned,
         {
             let contents: String = match fs::read_to_string(path).await {
                 Ok(c) => c,
@@ -382,8 +393,8 @@ pub mod config {
             filename: String,
             config: T,
         ) -> Result<bool, String>
-            where
-                T: ser::Serialize,
+        where
+            T: ser::Serialize,
         {
             if let Ok(toml) = toml::to_string(&config) {
                 if let Some(path) = Config::get_full_config_path(filename) {
