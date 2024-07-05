@@ -1,8 +1,7 @@
 pub mod config {
     use std::path::{Path, PathBuf};
-    use std::sync::{Arc, Mutex};
-    use std::thread::{JoinHandle, sleep};
-    use std::time::Duration;
+    use std::sync::Mutex;
+
     use anyhow::Error;
     use directories::BaseDirs;
     use log::{debug, error, info};
@@ -18,8 +17,7 @@ pub mod config {
     pub struct Config {
         option_data: Mutex<OptionData>,
         irc_data: irc::client::data::config::Config,
-        watcher: Arc<Mutex<RecommendedWatcher>>,
-        watch_thread: Option<JoinHandle<()>>,
+        watcher: notify::Result<RecommendedWatcher>,
     }
 
     impl Default for Config {
@@ -27,8 +25,7 @@ pub mod config {
             Self {
                 option_data: Mutex::new(OptionData::default()),
                 irc_data: Config::get_irc_default_config(),
-                watcher: Arc::new(Mutex::new(notify::recommended_watcher(Self::event_fn).unwrap())),
-                watch_thread: None,
+                watcher: notify::recommended_watcher(Self::event_fn),
             }
         }
     }
@@ -150,41 +147,12 @@ pub mod config {
                 )
                     .await,
             ) {
-                // let mut w = notify::recommended_watcher(Self::event_fn)?;
-                // w.watch(&Config::get_full_config_path(OPTIONS_CONFIG_FILE.to_string()).unwrap(), RecursiveMode::Recursive)?;
-                // const CONFIG_FILE: &str = "OPTIONS_CONFIG_FILE";
-
-                let watcher = Arc::new(Mutex::new(notify::recommended_watcher(Self::event_fn)?));
-
-                // Define variables for the loop
-                let config_file = OPTIONS_CONFIG_FILE.to_string();
-                let full_config_path = Config::get_full_config_path(config_file).unwrap();
-                let recursive_mode = RecursiveMode::Recursive;
-
-                let thread_watcher = Arc::clone(&watcher);
-                let handle: JoinHandle<()> = std::thread::spawn(move || {
-                    loop {
-                        match thread_watcher.lock() {
-                            Ok(mut guard) => {
-                                if !full_config_path.exists() {
-                                    println!("File does not exist, skipping this iteration");
-                                    sleep(Duration::from_secs(1));
-                                    continue;
-                                }
-                                match guard.watch(&full_config_path, recursive_mode) {
-                                    Ok(_) => println!("File watched successfully"),
-                                    Err(e) => println!("Error watching file: {:?}", e),
-                                }
-                            }
-                            Err(e) => println!("Error locking the watcher: {:?}", e),
-                        }
-                    }
-                });
+                let mut w = notify::recommended_watcher(Self::event_fn)?;
+                w.watch(&Config::get_full_config_path(OPTIONS_CONFIG_FILE.to_string()).unwrap(), RecursiveMode::Recursive)?;
                 Ok(Self {
                     option_data: Mutex::new(option_config),
                     irc_data: irc_config,
-                    watcher: Arc::clone(&watcher),
-                    watch_thread: Some(handle),
+                    watcher: Ok(w),
                     /*, subscribers: Mutex::new(HashSet::new())*/
                 })
             } else {
