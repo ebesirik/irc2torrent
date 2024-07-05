@@ -1,6 +1,7 @@
 pub mod config {
     use std::path::{Path, PathBuf};
-    use std::sync::Mutex;
+    use std::sync::{Arc, Mutex};
+    use std::thread::JoinHandle;
 
     use anyhow::Error;
     use directories::BaseDirs;
@@ -10,13 +11,15 @@ pub mod config {
     use serde::{de, ser};
     use serde_derive::{Deserialize, Serialize};
     use tokio::{fs, io};
+    // use tokio::task::JoinHandle;
 
     use crate::{IRC_CONFIG_FILE, OPTIONS_CONFIG_FILE};
 
     pub struct Config {
         option_data: Mutex<OptionData>,
         irc_data: irc::client::data::config::Config,
-        watcher: notify::Result<RecommendedWatcher>,
+        watcher: Arc<Mutex<RecommendedWatcher>>,
+        watch_thread: Option<JoinHandle<()>>,
     }
 
     impl Default for Config {
@@ -24,7 +27,8 @@ pub mod config {
             Self {
                 option_data: Mutex::new(OptionData::default()),
                 irc_data: Config::get_irc_default_config(),
-                watcher: notify::recommended_watcher(Self::event_fn),
+                watcher: Arc::new(Mutex::new(notify::recommended_watcher(Self::event_fn).unwrap())),
+                watch_thread: None,
             }
         }
     }
@@ -146,12 +150,30 @@ pub mod config {
                 )
                     .await,
             ) {
-                let mut w = notify::recommended_watcher(Self::event_fn)?;
-                w.watch(&Config::get_full_config_path(OPTIONS_CONFIG_FILE.to_string()).unwrap(), RecursiveMode::Recursive)?;
+                // let mut w = notify::recommended_watcher(Self::event_fn)?;
+                // w.watch(&Config::get_full_config_path(OPTIONS_CONFIG_FILE.to_string()).unwrap(), RecursiveMode::Recursive)?;
+                // const CONFIG_FILE: &str = "OPTIONS_CONFIG_FILE";
+
+                let watcher = Arc::new(Mutex::new(notify::recommended_watcher(Self::event_fn)?));
+
+                // Define variables for the loop
+                let config_file = OPTIONS_CONFIG_FILE.to_string();
+                let full_config_path = Config::get_full_config_path(config_file).unwrap();
+                let recursive_mode = RecursiveMode::Recursive;
+
+                let thread_watcher = Arc::clone(&watcher);
+                let handle: JoinHandle<()> = std::thread::spawn(move || {
+                    loop {
+                        let mut locked_watcher = thread_watcher.lock().unwrap();
+                        // Process the events
+                        locked_watcher.watch(&full_config_path, recursive_mode).unwrap();
+                    }
+                });
                 Ok(Self {
                     option_data: Mutex::new(option_config),
                     irc_data: irc_config,
-                    watcher: Ok(w),
+                    watcher: Arc::clone(&watcher),
+                    watch_thread: Some(handle),
                     /*, subscribers: Mutex::new(HashSet::new())*/
                 })
             } else {
